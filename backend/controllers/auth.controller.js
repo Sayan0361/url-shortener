@@ -3,7 +3,7 @@ import { usersTable } from "../models/index.js"
 import { loginBodySchema, signupBodySchema } from "../validation/request.validation.js";
 import { hashPasswordWithSalt } from "../utils/hash.js";
 import { getUserByEmail } from "../services/user.service.js";
-import jwt from "jsonwebtoken";
+import { createUserToken } from "../utils/token.js";
 
 export const signup = async(req,res) =>{
     // const { firstname, lastname, email, password } = req.body;
@@ -83,10 +83,9 @@ export const login = async(req,res) =>{
             })
         }
 
-        const token = jwt.sign({
+        const token = await createUserToken({
             id: user.id,
-        }, process.env.JWT_SECRET);
-
+        })
         return res.status(200).json({ 
             success: true,
             message: `Logged in Successfully`,
