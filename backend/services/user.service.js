@@ -17,3 +17,4 @@ export const getUserByEmail = async(email) => {
 
     return existingUser;
 }
+
