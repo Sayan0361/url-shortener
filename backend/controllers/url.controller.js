@@ -2,8 +2,9 @@ import { shortenBodySchema } from "../validation/request.validation.js";
 import { nanoid } from "nanoid";
 import { insertShortCodeIntoTable } from "../services/url.service.js";
 import { urlsTable } from "../models/url.model.js";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import db from "../db/index.js";
+import { success } from "zod";
 
 export const shorten = async(req,res) => {
     try{
@@ -64,6 +65,48 @@ export const getAllCreatedCodes = async(req,res) => {
         });
     }
     catch(error){
+        console.log(error);
+        return res.status(500).json({ error: error.message });
+    }
+}
+
+export const deleteCreatedURL = async(req,res) => {
+    try {
+        const id = req.params.id;
+        
+        // First check if the URL exists and belongs to the user
+        const [existingURL] = await db
+            .select()
+            .from(urlsTable)
+            .where(
+                and(
+                    eq(urlsTable.id, id),
+                    eq(urlsTable.userId, req.user.id)
+                )
+            );
+
+        if (!existingURL) {
+            return res.status(404).json({
+                error: "URL not found or you don't have permission to delete it"
+            });
+        }
+
+        // Perform the delete operation
+        const result = await db
+            .delete(urlsTable)
+            .where(
+                and(
+                    eq(urlsTable.id, id),
+                    eq(urlsTable.userId, req.user.id)
+                )
+            );
+
+        return res.status(200).json({
+            success: true,
+            message: "Deleted successfully"
+        });
+    }
+    catch(error) {
         console.log(error);
         return res.status(500).json({ error: error.message });
     }
