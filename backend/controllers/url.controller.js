@@ -32,7 +32,7 @@ export const shorten = async(req,res) => {
     }
 }
 
-export const shortCode = async(req,res) => {
+export const getTargetURL = async(req,res) => {
     try{
         const code = req.params.shortCode;
 
@@ -51,4 +51,20 @@ export const shortCode = async(req,res) => {
         return res.status(500).json({ error: error.message });
     }
 
+}
+
+export const getAllCreatedCodes = async(req,res) => {
+    try{
+        const codes = await db.select()
+        .from(urlsTable)
+        .where(eq(urlsTable.userId, req.user.id));
+
+        return res.status(200).json({
+            codes
+        });
+    }
+    catch(error){
+        console.log(error);
+        return res.status(500).json({ error: error.message });
+    }
 }
