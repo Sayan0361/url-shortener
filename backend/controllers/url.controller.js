@@ -1,10 +1,9 @@
 import { shortenBodySchema } from "../validation/request.validation.js";
 import { nanoid } from "nanoid";
-import { insertShortCodeIntoTable } from "../services/url.service.js";
+import { insertShortCodeIntoTable, updateURLFromTable, urlBelongsToUser, deleteURLFromTable } from "../services/url.service.js";
 import { urlsTable } from "../models/url.model.js";
 import { and, eq } from "drizzle-orm";
 import db from "../db/index.js";
-import { success } from "zod";
 
 export const shorten = async(req,res) => {
     try{
@@ -73,17 +72,9 @@ export const getAllCreatedCodes = async(req,res) => {
 export const deleteCreatedURL = async(req,res) => {
     try {
         const id = req.params.id;
+        const userId = req.user.id;
         
-        // First check if the URL exists and belongs to the user
-        const [existingURL] = await db
-            .select()
-            .from(urlsTable)
-            .where(
-                and(
-                    eq(urlsTable.id, id),
-                    eq(urlsTable.userId, req.user.id)
-                )
-            );
+        const existingURL = await urlBelongsToUser(id, userId);
 
         if (!existingURL) {
             return res.status(404).json({
@@ -91,19 +82,43 @@ export const deleteCreatedURL = async(req,res) => {
             });
         }
 
-        // Perform the delete operation
-        const result = await db
-            .delete(urlsTable)
-            .where(
-                and(
-                    eq(urlsTable.id, id),
-                    eq(urlsTable.userId, req.user.id)
-                )
-            );
+        await deleteURLFromTable(id, userId);
 
         return res.status(200).json({
             success: true,
             message: "Deleted successfully"
+        });
+    }
+    catch(error) {
+        console.log(error);
+        return res.status(500).json({ error: error.message });
+    }
+}
+
+export const updateCreatedURL = async(req,res) => {
+    try {
+        const id = req.params.id;
+        const userId = req.user.id;
+        const { newURL } = req.body; 
+        
+        if(!newURL || typeof newURL !== "string") {
+            return res.status(400).json({ error: "New URL is required" });
+        }
+
+        const existingURL = await urlBelongsToUser(id, userId);
+
+        if(!existingURL) {
+            return res.status(404).json({
+                error: "URL not found or you don't have permission to update it"
+            });
+        }
+
+        const updated = await updateURLFromTable(id, userId, newURL);
+
+        return res.status(200).json({
+            success: true,
+            message: "URL updated successfully",
+            updated
         });
     }
     catch(error) {
