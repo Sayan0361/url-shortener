@@ -16,3 +16,19 @@ export const shortenBodySchema = z.object({
     url: z.string().url(),
     code: z.string().optional(),
 })
+
+export const acceptCodeSchema = z.object({
+    email: z.string().email(),
+    providedCode: z.number(),
+})
+
+export const changePasswordSchema = z.object({
+    oldPassword: z.string().min(3),
+    newPassword: z.string().min(3)
+})
+
+export const acceptFPCodeSchema = z.object({
+    email: z.string().email(),
+    providedCode: z.number(),
+    newPassword: z.string().min(3)
+})

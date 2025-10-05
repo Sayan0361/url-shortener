@@ -10,4 +10,11 @@ export const hashPasswordWithSalt = async(password, userSalt=undefined) =>{
     }
 }
 
+export const hmacProcess = async(value,key) =>{
+    const result = createHmac("sha256", key)
+                    .update(value)
+                    .digest("hex")
+    return result;
+}
+
 

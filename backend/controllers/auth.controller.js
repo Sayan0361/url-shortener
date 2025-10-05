@@ -1,9 +1,11 @@
 import { db } from "../db/index.js"
 import { usersTable } from "../models/index.js"
 import { loginBodySchema, signupBodySchema } from "../validation/request.validation.js";
-import { hashPasswordWithSalt } from "../utils/hash.js";
+import { hashPasswordWithSalt, hmacProcess } from "../utils/hash.js";
 import { getUserByEmail } from "../services/user.service.js";
 import { createUserToken } from "../utils/token.js";
+import { transport } from "../middlewares/sendMail.js";
+import { eq } from "drizzle-orm";
 
 export const signup = async(req,res) =>{ 
     try{
@@ -120,6 +122,83 @@ export const logout = async(req,res) =>{
                 success: true,
                 message: "Logged out successfully",
             })
+    }
+    catch(error){
+        console.log(error);
+        res.status(500).json({ error: error.message });
+    }
+}
+
+export const sendVerificationCode = async(req,res) => {
+    try{
+        const {email} = req.body;
+        if (!email) {
+            return res.status(400).json({ success: false, message: "Email is required" });
+        }
+        // Fetch the user by email
+        const [user] = await db
+            .select({
+                id: usersTable.id,
+                email: usersTable.email,
+                verified: usersTable.verified,
+            })
+            .from(usersTable)
+            .where(eq(usersTable.email, email));
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: `User with this email (${email}) doesn't exist.`,
+            });
+        }
+
+        if (user.verified) {
+            return res.status(400).json({
+                success: false,
+                message: "User is already verified.",
+            });
+        }
+        // Generate a 6-digit verification code
+        const codeValue = Math.floor(100000 + Math.random() * 900000).toString();
+
+        // Hash the code before storing
+        const hashedCodeValue = await hmacProcess(codeValue, process.env.HMAC_VERIFICATION_CODE_SECRET);
+
+        // Update user with verification details
+        await db
+        .update(usersTable)
+        .set({
+            verificationCode: hashedCodeValue,
+            verificationCodeValidation: Math.floor(Date.now() / 1000), // store Unix time
+        })
+        .where(eq(usersTable.email, email));
+
+        // Send email using Nodemailer
+        const info = await transport.sendMail({
+            from: process.env.NODE_CODE_SENDING_EMAIL_ADDRESS,
+            to: email,
+            subject: "Your Verification Code",
+            html: `
+                <div style="font-family: Arial, sans-serif; text-align: center;">
+                <h2>Your Verification Code</h2>
+                <p style="font-size: 22px; font-weight: bold;">${codeValue}</p>
+                <p>This code will expire in 5 minutes.</p>
+                </div>
+            `,
+        });
+
+        if (info.accepted.includes(email)) {
+            return res.status(200).json({
+                success: true,
+                message: "Verification code sent successfully to your email.",
+            });
+        } 
+        else {
+            return res.status(400).json({
+                success: false,
+                message: "Failed to send verification email.",
+            });
+        }
     }
     catch(error){
         console.log(error);
