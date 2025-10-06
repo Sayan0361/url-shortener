@@ -1,6 +1,6 @@
 import { db } from "../db/index.js"
 import { usersTable } from "../models/index.js"
-import { loginBodySchema, signupBodySchema } from "../validation/request.validation.js";
+import { acceptCodeSchema, loginBodySchema, signupBodySchema } from "../validation/request.validation.js";
 import { hashPasswordWithSalt, hmacProcess } from "../utils/hash.js";
 import { getUserByEmail } from "../services/user.service.js";
 import { createUserToken } from "../utils/token.js";
@@ -197,6 +197,92 @@ export const sendVerificationCode = async(req,res) => {
             return res.status(400).json({
                 success: false,
                 message: "Failed to send verification email.",
+            });
+        }
+    }
+    catch(error){
+        console.log(error);
+        res.status(500).json({ error: error.message });
+    }
+}
+
+export const verifyVerificationCode = async(req,res) => {
+    try{
+        const validationResult = await acceptCodeSchema.safeParseAsync(req.body);
+        if(validationResult.error){
+            return res.status(400).json({
+                error: validationResult.error.format()
+            });
+        }
+        const {email, providedCode} = validationResult.data;
+        const code = providedCode.toString();
+
+        // Fetch the user by email
+        const [user] = await db
+            .select({
+                id: usersTable.id,
+                email: usersTable.email,
+                verified: usersTable.verified,
+                verificationCode: usersTable.verificationCode,
+                verificationCodeValidation: usersTable.verificationCodeValidation,
+            })
+            .from(usersTable)
+            .where(eq(usersTable.email, email));
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: `User with this email (${email}) doesn't exist.`,
+            });
+        }
+
+        if (user.verified) {
+            return res.status(400).json({
+                success: false,
+                message: "User is already verified.",
+            });
+        }
+
+        // Check if verification fields exist
+        if (!user.verificationCode || !user.verificationCodeValidation) {
+            return res.status(400).json({
+                success: false,
+                message: "Verification code not found or invalid.",
+            });
+        }
+
+        // Check if code expired (5 min = 300 seconds)
+        const currentTime = Math.floor(Date.now() / 1000);
+        if (currentTime - user.verificationCodeValidation > 5 * 60) {
+            return res.status(400).json({
+                success: false,
+                message: "Sir, what were you doing all this time? Verification code has expired!!",
+            });
+        }
+        // Hash the provided code for comparison
+        const hashedCodeValue = await hmacProcess(code, process.env.HMAC_VERIFICATION_CODE_SECRET);
+
+        if (hashedCodeValue === user.verificationCode) {
+            // Update user as verified and clear codes
+            await db
+                .update(usersTable)
+                .set({
+                    verified: true,
+                    verificationCode: null,
+                    verificationCodeValidation: null,
+                    updatedAt: new Date(),
+                })
+                .where(eq(usersTable.email, email));
+            
+            return res.status(200).json({
+                success: true,
+                message: "Your account has been verified successfully.",
+            });
+        }
+        else{
+            return res.status(400).json({
+                success: false,
+                message: "Invalid verification code.",
             });
         }
     }
