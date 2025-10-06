@@ -1,9 +1,11 @@
 import { shortenBodySchema } from "../validation/request.validation.js";
 import { nanoid } from "nanoid";
 import { insertShortCodeIntoTable, updateURLFromTable, urlBelongsToUser, deleteURLFromTable } from "../services/url.service.js";
-import { urlsTable } from "../models/url.model.js";
+import { urlsTable, urlAnalyticsTable } from "../models/url.model.js";
 import { and, eq } from "drizzle-orm";
 import db from "../db/index.js";
+import { UAParser } from "ua-parser-js";
+import fetch from "node-fetch";
 
 export const shorten = async(req,res) => {
     try{
@@ -32,26 +34,70 @@ export const shorten = async(req,res) => {
     }
 }
 
-export const getTargetURL = async(req,res) => {
-    try{
+export const getTargetURL = async (req, res) => {
+    try {
         const code = req.params.shortCode;
 
-        const [ result ] = await db.select({
+        // Find the target URL for the given short code
+        const [result] = await db
+        .select({
+            id: urlsTable.id,
             targetURL: urlsTable.targetURL,
-        }).from(urlsTable).where(eq(urlsTable.shortCode, code));
-
-        if(!result) return res.status(404).json({
-            error: `Invalid URL`
         })
+        .from(urlsTable)
+        .where(eq(urlsTable.shortCode, code));
 
+        if (!result) {
+            return res.status(404).json({
+                error: "Invalid URL",
+            });
+        }
+
+        // --- Collect Analytics Info ---
+        const userAgent = req.headers["user-agent"];
+        const parser = new UAParser(userAgent);
+        const ua = parser.getResult();
+
+        const ip =
+        req.headers["x-forwarded-for"]?.split(",")[0] || req.socket.remoteAddress;
+
+        let location = {
+            country: "Unknown",
+            region: "Unknown",
+            city: "Unknown",
+        };
+
+        try {
+        // Optional: use free geolocation API
+            const geo = await fetch(`https://ipapi.co/${ip}/json/`).then((r) => r.json());
+            location = {
+                country: geo.country_name || "Unknown",
+                region: geo.region || "Unknown",
+                city: geo.city || "Unknown",
+            };
+        } catch (e) {
+            console.log("Geo lookup failed:", e.message);
+        }
+
+        // Insert analytics record into DB
+        await db.insert(urlAnalyticsTable).values({
+        urlId: result.id,
+        ipAddress: ip,
+        region: location.region,
+        country: location.country,
+        city: location.city,
+        deviceType: ua.device.type || "desktop",
+        browser: ua.browser.name || "unknown",
+        userAgent,
+        });
+
+        // --- Redirect the user ---
         return res.redirect(result.targetURL);
-    }
-    catch(error){
+    } catch (error) {
         console.log(error);
         return res.status(500).json({ error: error.message });
     }
-
-}
+};
 
 export const getAllCreatedCodes = async(req,res) => {
     try{

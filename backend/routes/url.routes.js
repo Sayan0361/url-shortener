@@ -4,21 +4,19 @@ import { authenticationMiddleware } from "../middlewares/auth.middleware.js"
 
 const router = express.Router();
 
-// Apply authentication to all URL routes
-router.use(authenticationMiddleware);
-
 // create a short url from a long url
-router.post("/shorten", shorten);
+router.post("/shorten", authenticationMiddleware, shorten);
 
 // user will get all his created codes
-router.get("/codes", getAllCreatedCodes);
+router.get("/codes", authenticationMiddleware, getAllCreatedCodes);
 
 // delete ur created url
-router.delete("/delete/:id", deleteCreatedURL);
+router.delete("/delete/:id", authenticationMiddleware, deleteCreatedURL);
 
 //  update the destination (long) URL of an existing short URL
-router.put("/update/:id", updateCreatedURL);
+router.put("/update/:id", authenticationMiddleware, updateCreatedURL);
 
+// this route is public route..no authentication required
 // /:shortCode is path parameter..this controller is to redirect the user to the targetURL
 router.get("/:shortCode", getTargetURL);
 

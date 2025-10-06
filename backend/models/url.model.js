@@ -11,3 +11,20 @@ export const urlsTable = pgTable("urls",{
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").$onUpdate(()=> new Date()),
 })
+
+export const urlAnalyticsTable = pgTable("url_analytics", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    urlId: uuid("url_id").notNull().references(() => urlsTable.id),
+
+    ipAddress: varchar("ip_address", { length: 45 }),  
+    region: varchar("region", { length: 100 }),
+    country: varchar("country", { length: 100 }),
+    city: varchar("city", { length: 100 }),
+
+    deviceType: varchar("device_type", { length: 50 }),
+    browser: varchar("browser", { length: 100 }),
+
+    userAgent: text("user_agent"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+});
