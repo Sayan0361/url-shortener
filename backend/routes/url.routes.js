@@ -1,5 +1,5 @@
 import express from "express"
-import { deleteCreatedURL, getAllCreatedCodes, getAnalytics, getTargetURL, shorten, updateCreatedURL } from "../controllers/url.controller.js";
+import { deleteCreatedURL, generateQRCode, getAllCreatedCodes, getAnalytics, getTargetURL, shorten, updateCreatedURL } from "../controllers/url.controller.js";
 import { authenticationMiddleware } from "../middlewares/auth.middleware.js"
 
 const router = express.Router();
@@ -18,6 +18,9 @@ router.put("/update/:id", authenticationMiddleware, updateCreatedURL);
 
 // get url analytics 
 router.get("/analytics/:id", authenticationMiddleware, getAnalytics);
+
+// generate QRCode
+router.get("/qrcode/:shortCode", authenticationMiddleware, generateQRCode);
 
 // this route is public route..no authentication required
 // /:shortCode is path parameter..this controller is to redirect the user to the targetURL

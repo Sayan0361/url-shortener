@@ -6,6 +6,7 @@ import { and, eq, sql } from "drizzle-orm";
 import db from "../db/index.js";
 import { UAParser } from "ua-parser-js";
 import fetch from "node-fetch";
+import QRCode from "qrcode";
 
 export const shorten = async(req,res) => {
     try{
@@ -36,66 +37,64 @@ export const shorten = async(req,res) => {
 
 export const getTargetURL = async (req, res) => { 
     try {
-        const code = req.params.shortCode;
+        const { shortCode } = req.params;
 
         // Find the target URL for the given short code
-        const [result] = await db
-        .select({
-            id: urlsTable.id,
-            targetURL: urlsTable.targetURL,
-        })
-        .from(urlsTable)
-        .where(eq(urlsTable.shortCode, code));
+        const [url] = await db
+            .select({
+                id: urlsTable.id,
+                targetURL: urlsTable.targetURL,
+            })
+            .from(urlsTable)
+            .where(eq(urlsTable.shortCode, shortCode));
 
-        if (!result) {
-            return res.status(404).json({
-                error: "Invalid URL",
-            });
+        if (!url) {
+            return res.status(404).json({ error: "Invalid URL" });
         }
 
-        // --- Collect Analytics Info ---
+        // Collect analytics info
         const userAgent = req.headers["user-agent"];
         const parser = new UAParser(userAgent);
         const ua = parser.getResult();
 
-        const ip =
-        req.headers["x-forwarded-for"]?.split(",")[0] || req.socket.remoteAddress;
+        // Detect IP address (supports proxies)
+        const ip = req.headers["x-forwarded-for"]?.split(",")[0] || req.socket.remoteAddress;
 
-        let location = {
-            country: "Unknown",
-            region: "Unknown",
-            city: "Unknown",
-        };
+        let location = { country: "Unknown", region: "Unknown", city: "Unknown" };
 
-        try {
-        // Optional: use free geolocation API
-            const geo = await fetch(`https://ipapi.co/${ip}/json/`).then((r) => r.json());
-            location = {
-                country: geo.country_name || "Unknown",
-                region: geo.region || "Unknown",
-                city: geo.city || "Unknown",
-            };
-        } catch (e) {
-            console.log("Geo lookup failed:", e.message);
+        // Handle localhost IPs gracefully
+        if (ip === "::1" || ip === "127.0.0.1") {
+            location = { country: "Localhost", region: "Local", city: "Dev Machine" };
+        } else {
+            try {
+                const geo = await fetch(`https://ipapi.co/${ip}/json/`).then((r) => r.json());
+                location = {
+                    country: geo.country_name || "Unknown",
+                    region: geo.region || "Unknown",
+                    city: geo.city || "Unknown",
+                };
+            } catch (geoError) {
+                console.warn("Geo lookup failed:", geoError.message);
+            }
         }
 
-        // Insert analytics record into DB
+        // Store analytics data
         await db.insert(urlAnalyticsTable).values({
-        urlId: result.id,
-        ipAddress: ip,
-        region: location.region,
-        country: location.country,
-        city: location.city,
-        deviceType: ua.device.type || "desktop",
-        browser: ua.browser.name || "unknown",
-        userAgent,
+            urlId: url.id,
+            ipAddress: ip,
+            region: location.region,
+            country: location.country,
+            city: location.city,
+            deviceType: ua.device.type || "desktop",
+            browser: ua.browser.name || "unknown",
+            userAgent,
         });
 
-        // --- Redirect the user ---
-        return res.redirect(result.targetURL);
+        // Redirect user to the original URL
+        return res.redirect(url.targetURL);
     } catch (error) {
-        console.log(error);
-        return res.status(500).json({ error: error.message });
+        console.error("Error in getTargetURL:", error);
+        return res.status(500).json({ error: "Internal Server Error" });
     }
 };
 
@@ -175,59 +174,66 @@ export const updateCreatedURL = async(req,res) => {
 
 export const getAnalytics = async (req, res) => {
     try {
-        const id = req.params.id;
+        const { id } = req.params;
 
-        // Step 1: Check if URL exists
+        // Verify URL existence
         const [url] = await db
-        .select({
-            id: urlsTable.id,
-            targetURL: urlsTable.targetURL,
-            shortCode: urlsTable.shortCode,
-        })
-        .from(urlsTable)
-        .where(eq(urlsTable.id, id));
+            .select({
+                id: urlsTable.id,
+                targetURL: urlsTable.targetURL,
+                shortCode: urlsTable.shortCode,
+            })
+            .from(urlsTable)
+            .where(eq(urlsTable.id, id));
 
         if (!url) {
             return res.status(404).json({ error: "URL not found" });
         }
 
-        // Step 2: Get total clicks
-        const [clicks] = await db
-        .select({ total: sql`COUNT(*)` })
-        .from(urlAnalyticsTable)
-        .where(eq(urlAnalyticsTable.urlId, id));
+        // Total clicks
+        const [totalClicks] = await db
+            .select({ count: sql`COUNT(*)` })
+            .from(urlAnalyticsTable)
+            .where(eq(urlAnalyticsTable.urlId, id));
 
-        // Step 3: Group by country
-        const countryStats = await db
-        .select({
-            country: urlAnalyticsTable.country,
-            count: sql`COUNT(*)`,
-        })
-        .from(urlAnalyticsTable)
-        .where(eq(urlAnalyticsTable.urlId, id))
-        .groupBy(urlAnalyticsTable.country);
+        // Grouped stats
+        const [byCountry, byDevice, byBrowser, dailyStats] = await Promise.all([
+            db.select({
+                country: urlAnalyticsTable.country,
+                count: sql`COUNT(*)`,
+            })
+            .from(urlAnalyticsTable)
+            .where(eq(urlAnalyticsTable.urlId, id))
+            .groupBy(urlAnalyticsTable.country),
 
-        // Step 4: Group by device type
-        const deviceStats = await db
-        .select({
-            deviceType: urlAnalyticsTable.deviceType,
-            count: sql`COUNT(*)`,
-        })
-        .from(urlAnalyticsTable)
-        .where(eq(urlAnalyticsTable.urlId, id))
-        .groupBy(urlAnalyticsTable.deviceType);
+            db.select({
+                deviceType: urlAnalyticsTable.deviceType,
+                count: sql`COUNT(*)`,
+            })
+            .from(urlAnalyticsTable)
+            .where(eq(urlAnalyticsTable.urlId, id))
+            .groupBy(urlAnalyticsTable.deviceType),
 
-        // Step 5: Group by browser (optional)
-        const browserStats = await db
-        .select({
-            browser: urlAnalyticsTable.browser,
-            count: sql`COUNT(*)`,
-        })
-        .from(urlAnalyticsTable)
-        .where(eq(urlAnalyticsTable.urlId, id))
-        .groupBy(urlAnalyticsTable.browser);
+            db.select({
+                browser: urlAnalyticsTable.browser,
+                count: sql`COUNT(*)`,
+            })
+            .from(urlAnalyticsTable)
+            .where(eq(urlAnalyticsTable.urlId, id))
+            .groupBy(urlAnalyticsTable.browser),
 
-        // Step 6: Return combined result
+            // Optional: clicks per day
+            db.select({
+                date: sql`DATE(${urlAnalyticsTable.createdAt})`,
+                count: sql`COUNT(*)`,
+            })
+            .from(urlAnalyticsTable)
+            .where(eq(urlAnalyticsTable.urlId, id))
+            .groupBy(sql`DATE(${urlAnalyticsTable.createdAt})`)
+            .orderBy(sql`DATE(${urlAnalyticsTable.createdAt})`),
+        ]);
+
+        // Return combined analytics
         return res.json({
             url: {
                 id: url.id,
@@ -235,14 +241,56 @@ export const getAnalytics = async (req, res) => {
                 targetURL: url.targetURL,
             },
             analytics: {
-                totalClicks: Number(clicks.total),
-                byCountry: countryStats,
-                byDevice: deviceStats,
-                byBrowser: browserStats,
+                totalClicks: Number(totalClicks.count || 0),
+                byCountry,
+                byDevice,
+                byBrowser,
+                dailyStats,
             },
         });
     } catch (error) {
         console.error("Error fetching analytics:", error);
-        return res.status(500).json({ error: error.message });
+        return res.status(500).json({ error: "Internal Server Error" });
+    }
+};
+
+export const generateQRCode = async (req, res) => {
+    try {
+        const { shortCode } = req.params;
+
+        // Fetch the target URL from DB
+        const [url] = await db
+            .select({
+                id: urlsTable.id,
+                targetURL: urlsTable.targetURL,
+                shortCode: urlsTable.shortCode,
+            })
+            .from(urlsTable)
+            .where(eq(urlsTable.shortCode, shortCode));
+
+        if (!url) {
+            return res.status(404).json({ error: "Short URL not found" });
+        }
+
+        // Build the full short URL (your base domain + short code)
+        const fullShortURL = `${process.env.BASE_URL || "http://localhost:3000"}/${url.shortCode}`;
+
+        // Generate QR Code as PNG Buffer
+        const qrBuffer = await QRCode.toBuffer(fullShortURL, {
+            width: 300,
+            color: {
+                dark: "#000000",  // Black modules
+                light: "#ffffff", // White background
+            },
+            errorCorrectionLevel: "H",
+        });
+
+        // Send the image directly
+        res.setHeader("Content-Type", "image/png");
+        res.send(qrBuffer);
+
+    } catch (error) {
+        console.error("Error generating QR Code:", error);
+        return res.status(500).json({ error: "Failed to generate QR code" });
     }
 };
