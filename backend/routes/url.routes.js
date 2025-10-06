@@ -1,5 +1,5 @@
 import express from "express"
-import { deleteCreatedURL, getAllCreatedCodes, getTargetURL, shorten, updateCreatedURL } from "../controllers/url.controller.js";
+import { deleteCreatedURL, getAllCreatedCodes, getAnalytics, getTargetURL, shorten, updateCreatedURL } from "../controllers/url.controller.js";
 import { authenticationMiddleware } from "../middlewares/auth.middleware.js"
 
 const router = express.Router();
@@ -15,6 +15,9 @@ router.delete("/delete/:id", authenticationMiddleware, deleteCreatedURL);
 
 //  update the destination (long) URL of an existing short URL
 router.put("/update/:id", authenticationMiddleware, updateCreatedURL);
+
+// get url analytics 
+router.get("/analytics/:id", authenticationMiddleware, getAnalytics);
 
 // this route is public route..no authentication required
 // /:shortCode is path parameter..this controller is to redirect the user to the targetURL
