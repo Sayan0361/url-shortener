@@ -32,3 +32,15 @@ export const acceptFPCodeSchema = z.object({
     providedCode: z.number(),
     newPassword: z.string().min(3)
 })
+
+export const changeNameSchema = z.object({
+    firstname: z
+        .string()
+        .min(2, "First name must have at least 2 characters.")
+        .max(55, "First name must not exceed 55 characters."),
+    lastname: z
+        .string()
+        .max(55, "Last name must not exceed 55 characters.")
+        .optional()
+        .or(z.literal("")), // allows empty string
+});

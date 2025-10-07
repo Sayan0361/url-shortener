@@ -1,5 +1,5 @@
 import express from "express"
-import { changePassword, login, logout, sendForgotPasswordCode, sendVerificationCode, signup, verifyForgotPasswordCode, verifyVerificationCode } from "../controllers/auth.controller.js";
+import { changeFirstNameLastName, changePassword, getUserInfo, login, logout, sendForgotPasswordCode, sendVerificationCode, signup, verifyForgotPasswordCode, verifyVerificationCode } from "../controllers/auth.controller.js";
 import { authenticationMiddleware, ensureAuthenticated } from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
@@ -19,5 +19,9 @@ router.patch("/change-password", authenticationMiddleware, ensureAuthenticated, 
 router.patch("/send-forgot-password-code", authenticationMiddleware, ensureAuthenticated, sendForgotPasswordCode);
 
 router.patch("/verify-forgot-password-code", authenticationMiddleware, ensureAuthenticated, verifyForgotPasswordCode);
+
+router.get("/me", authenticationMiddleware, ensureAuthenticated, getUserInfo);
+
+router.patch("/change-name", authenticationMiddleware,ensureAuthenticated, changeFirstNameLastName);
 
 export default router;

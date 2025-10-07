@@ -1,6 +1,13 @@
-import { db } from "../db/index.js"
-import { usersTable } from "../models/index.js"
-import { acceptCodeSchema, acceptFPCodeSchema, changePasswordSchema, loginBodySchema, signupBodySchema } from "../validation/request.validation.js";
+import { db } from "../db/index.js";
+import { usersTable } from "../models/index.js";
+import {
+    acceptCodeSchema,
+    acceptFPCodeSchema,
+    changeNameSchema,
+    changePasswordSchema,
+    loginBodySchema,
+    signupBodySchema,
+} from "../validation/request.validation.js";
 import { hashPasswordWithSalt, hmacProcess } from "../utils/hash.js";
 import { getUserByEmail } from "../services/user.service.js";
 import { createUserToken } from "../utils/token.js";
@@ -12,7 +19,7 @@ export const signup = async (req, res) => {
         const validationResult = await signupBodySchema.safeParseAsync(req.body);
         if (validationResult.error) {
             return res.status(400).json({
-                error: validationResult.error.format()
+                error: validationResult.error.format(),
             });
         }
 
@@ -22,11 +29,13 @@ export const signup = async (req, res) => {
 
         if (existingUser) {
             return res.status(400).json({
-                error: `User with this email:${email} already exists!`
-            })
+                error: `User with this email:${email} already exists!`,
+            });
         }
 
-        const { salt, password: hashedPassword } = await hashPasswordWithSalt(password);
+        const { salt, password: hashedPassword } = await hashPasswordWithSalt(
+            password
+        );
 
         const [user] = await db
             .insert(usersTable)
@@ -39,35 +48,34 @@ export const signup = async (req, res) => {
             })
             .returning({
                 id: usersTable.id,
-                email: usersTable.email
+                email: usersTable.email,
             });
 
         if (!user) {
-            throw new Error('Failed to create user');
+            throw new Error("Failed to create user");
         }
 
         return res.status(201).json({
             success: true,
             message: `User created with this email: ${email}`,
             data: {
-                userId: user.id
-            }
+                userId: user.id,
+            },
         });
-    }
-    catch (error) {
+    } catch (error) {
         console.log(error);
         return res.status(500).json({
-            error: error.message || 'Failed to create user'
+            error: error.message || "Failed to create user",
         });
     }
-}
+};
 
 export const login = async (req, res) => {
     try {
         const validationResult = await loginBodySchema.safeParseAsync(req.body);
         if (validationResult.error) {
             return res.status(400).json({
-                error: validationResult.error.format()
+                error: validationResult.error.format(),
             });
         }
         const { email, password } = validationResult.data;
@@ -76,15 +84,18 @@ export const login = async (req, res) => {
 
         if (!user) {
             return res.status(400).json({
-                error: `User with this email doesn't exist!`
+                error: `User with this email doesn't exist!`,
             });
         }
 
-        const { password: hashedInputPassword } = await hashPasswordWithSalt(password, user.salt);
+        const { password: hashedInputPassword } = await hashPasswordWithSalt(
+            password,
+            user.salt
+        );
 
         if (hashedInputPassword !== user.password) {
             return res.status(400).json({
-                error: `Invalid password`
+                error: `Invalid password`,
             });
         }
 
@@ -97,43 +108,41 @@ export const login = async (req, res) => {
             expires: new Date(Date.now() + 8 * 60 * 60 * 1000),
             httpOnly: process.env.NODE_ENV === "production",
             secure: process.env.NODE_ENV === "production",
-            sameSite: 'strict'
+            sameSite: "strict",
         });
 
         return res.status(200).json({
             success: true,
             message: `Logged in Successfully`,
             data: {
-                token
-            }
+                token,
+            },
         });
-    }
-    catch (error) {
+    } catch (error) {
         console.log(error);
         return res.status(500).json({ error: error.message });
     }
-}
+};
 
 export const logout = async (req, res) => {
     try {
-        res.clearCookie("Authorization")
-            .status(200)
-            .json({
-                success: true,
-                message: "Logged out successfully",
-            })
-    }
-    catch (error) {
+        res.clearCookie("Authorization").status(200).json({
+            success: true,
+            message: "Logged out successfully",
+        });
+    } catch (error) {
         console.log(error);
         res.status(500).json({ error: error.message });
     }
-}
+};
 
 export const sendVerificationCode = async (req, res) => {
     try {
         const { email } = req.body;
         if (!email) {
-            return res.status(400).json({ success: false, message: "Email is required" });
+            return res
+                .status(400)
+                .json({ success: false, message: "Email is required" });
         }
         // Fetch the user by email
         const [user] = await db
@@ -162,7 +171,10 @@ export const sendVerificationCode = async (req, res) => {
         const codeValue = Math.floor(100000 + Math.random() * 900000).toString();
 
         // Hash the code before storing
-        const hashedCodeValue = await hmacProcess(codeValue, process.env.HMAC_VERIFICATION_CODE_SECRET);
+        const hashedCodeValue = await hmacProcess(
+            codeValue,
+            process.env.HMAC_VERIFICATION_CODE_SECRET
+        );
 
         // Update user with verification details
         await db
@@ -192,26 +204,24 @@ export const sendVerificationCode = async (req, res) => {
                 success: true,
                 message: "Verification code sent successfully to your email.",
             });
-        }
-        else {
+        } else {
             return res.status(400).json({
                 success: false,
                 message: "Failed to send verification email.",
             });
         }
-    }
-    catch (error) {
+    } catch (error) {
         console.log(error);
         res.status(500).json({ error: error.message });
     }
-}
+};
 
 export const verifyVerificationCode = async (req, res) => {
     try {
         const validationResult = await acceptCodeSchema.safeParseAsync(req.body);
         if (validationResult.error) {
             return res.status(400).json({
-                error: validationResult.error.format()
+                error: validationResult.error.format(),
             });
         }
         const { email, providedCode } = validationResult.data;
@@ -256,11 +266,15 @@ export const verifyVerificationCode = async (req, res) => {
         if (currentTime - user.verificationCodeValidation > 5 * 60) {
             return res.status(400).json({
                 success: false,
-                message: "Sir, what were you doing all this time? Verification code has expired!!",
+                message:
+                    "Sir, what were you doing all this time? Verification code has expired!!",
             });
         }
         // Hash the provided code for comparison
-        const hashedCodeValue = await hmacProcess(code, process.env.HMAC_VERIFICATION_CODE_SECRET);
+        const hashedCodeValue = await hmacProcess(
+            code,
+            process.env.HMAC_VERIFICATION_CODE_SECRET
+        );
 
         if (hashedCodeValue === user.verificationCode) {
             // Update user as verified and clear codes
@@ -278,19 +292,17 @@ export const verifyVerificationCode = async (req, res) => {
                 success: true,
                 message: "Your account has been verified successfully.",
             });
-        }
-        else {
+        } else {
             return res.status(400).json({
                 success: false,
                 message: "Invalid verification code.",
             });
         }
-    }
-    catch (error) {
+    } catch (error) {
         console.log(error);
         res.status(500).json({ error: error.message });
     }
-}
+};
 
 export const changePassword = async (req, res) => {
     try {
@@ -333,7 +345,6 @@ export const changePassword = async (req, res) => {
                 .status(401)
                 .json({ success: false, message: "You are not a verified user." });
         }
-
 
         // Compare old password
         const { password: hashedOldPassword } = await hashPasswordWithSalt(
@@ -494,10 +505,7 @@ export const verifyForgotPasswordCode = async (req, res) => {
             });
         }
 
-        if (
-            !user.forgotPasswordCode ||
-            !user.forgotPasswordCodeValidation
-        ) {
+        if (!user.forgotPasswordCode || !user.forgotPasswordCodeValidation) {
             return res.status(400).json({
                 success: false,
                 message: "No valid forgot password request found. Please try again.",
@@ -551,6 +559,112 @@ export const verifyForgotPasswordCode = async (req, res) => {
         });
     } catch (error) {
         console.error("Error verifying forgot password code:", error);
+        return res.status(500).json({
+            success: false,
+            error: error.message,
+        });
+    }
+};
+
+export const changeFirstNameLastName = async (req, res) => {
+    try {
+        const { id: userId } = req.user;
+        const { firstname, lastname } = req.body;
+
+        // Validate input
+        const validationResult = await changeNameSchema.safeParseAsync({
+            firstname,
+            lastname,
+        });
+
+        if (validationResult.error) {
+            return res.status(400).json({
+                success: false,
+                message: validationResult.error.format(),
+            });
+        }
+
+        // Check if user exists
+        const [user] = await db
+            .select({
+                id: usersTable.id,
+                firstname: usersTable.firstname,
+                lastname: usersTable.lastname,
+            })
+            .from(usersTable)
+            .where(eq(usersTable.id, userId));
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found.",
+            });
+        }
+
+        // Update first name and last name
+        await db
+            .update(usersTable)
+            .set({
+                firstname,
+                lastname,
+                updatedAt: new Date(),
+            })
+            .where(eq(usersTable.id, userId));
+
+        return res.status(200).json({
+            success: true,
+            message: "Your name has been updated successfully.",
+            updatedData: { firstname, lastname },
+        });
+    } catch (error) {
+        console.error("Error updating user name:", error);
+        return res.status(500).json({
+            success: false,
+            error: error.message,
+        });
+    }
+};
+
+export const getUserInfo = async (req, res) => {
+    try {
+        const { id: userId } = req.user;
+
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: "Unauthorized. Please log in again.",
+            });
+        }
+
+        // Select only non-sensitive fields
+        const [user] = await db
+            .select({
+                id: usersTable.id,
+                firstname: usersTable.firstname,
+                lastname: usersTable.lastname,
+                email: usersTable.email,
+                verified: usersTable.verified,
+                role: usersTable.role,
+                createdAt: usersTable.createdAt,
+                updatedAt: usersTable.updatedAt,
+            })
+            .from(usersTable)
+            .where(eq(usersTable.id, userId));
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found.",
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "User information fetched successfully.",
+            data: user,
+        });
+    } catch (error) {
+        console.error("Error fetching user info:", error);
         return res.status(500).json({
             success: false,
             error: error.message,
