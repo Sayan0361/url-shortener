@@ -1,3 +1,5 @@
+import { useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import {
     Card,
@@ -9,14 +11,70 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useNavigate } from "react-router-dom"
+import { useSignup, useSendVerificationCode } from "@/hooks/useUserQueries"
+import { toast } from "sonner"
 
 export function SignUp() {
     const navigate = useNavigate()
+    const { mutate: signup, isPending: isSigningUp } = useSignup()
+    const { mutate: sendVerificationCode, isPending: isSendingCode } = useSendVerificationCode()
+
+    const [formData, setFormData] = useState({
+        firstName: "",
+        lastName: "",
+        email: "",
+        password: "",
+    })
+
+    const isPending = isSigningUp || isSendingCode
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setFormData({ ...formData, [e.target.id]: e.target.value })
+    }
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault()
-        // Handle form submission here
+
+        signup(
+            {
+                firstname: formData.firstName,
+                lastname: formData.lastName,
+                email: formData.email,
+                password: formData.password,
+            },
+            {
+                onSuccess: () => {
+                    // After successful signup, send verification code
+                    sendVerificationCode(formData.email, {
+                        onSuccess: () => {
+                            toast.success("Account created! Verification code sent to your email.")
+                            // Redirect to OTP page with email as state
+                            navigate("/otp", { 
+                                state: { 
+                                    email: formData.email,
+                                    purpose: "verify-email"
+                                }
+                            })
+                        },
+                        onError: () => {
+                            // Even if code sending fails, still redirect to OTP page
+                            // User can request a new code from there
+                            toast.error("Account created but failed to send verification code. You can request a new code on the next page.")
+                            navigate("/otp", { 
+                                state: { 
+                                    email: formData.email,
+                                    purpose: "verify-email"
+                                }
+                            })
+                        },
+                    })
+                },
+                onError: (err: any) => {
+                    const message = err?.response?.data?.message || "Signup failed."
+                    toast.error(message)
+                },
+            }
+        )
     }
 
     return (
@@ -43,59 +101,69 @@ export function SignUp() {
                 </CardHeader>
                 
                 <CardContent className="space-y-4">
-                    <form onSubmit={handleSubmit}>
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="firstName" className="text-sm font-medium">
-                                        First Name *
-                                    </Label>
-                                    <Input
-                                        id="firstName"
-                                        type="text"
-                                        placeholder="John"
-                                        required
-                                        className="transition-colors focus-visible:ring-primary"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="lastName" className="text-sm font-medium">
-                                        Last Name
-                                    </Label>
-                                    <Input
-                                        id="lastName"
-                                        type="text"
-                                        placeholder="Doe"
-                                        className="transition-colors focus-visible:ring-primary"
-                                    />
-                                </div>
-                            </div>
-                            
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label htmlFor="email" className="text-sm font-medium">
-                                    Email *
+                                <Label htmlFor="firstName" className="text-sm font-medium">
+                                    First Name *
                                 </Label>
                                 <Input
-                                    id="email"
-                                    type="email"
-                                    placeholder="m@example.com"
+                                    id="firstName"
+                                    type="text"
+                                    placeholder="John"
                                     required
+                                    value={formData.firstName}
+                                    onChange={handleChange}
                                     className="transition-colors focus-visible:ring-primary"
+                                    disabled={isPending}
                                 />
                             </div>
-                            
                             <div className="space-y-2">
-                                <Label htmlFor="password" className="text-sm font-medium">
-                                    Password *
+                                <Label htmlFor="lastName" className="text-sm font-medium">
+                                    Last Name
                                 </Label>
-                                <Input 
-                                    id="password" 
-                                    type="password" 
-                                    required
+                                <Input
+                                    id="lastName"
+                                    type="text"
+                                    placeholder="Doe"
+                                    value={formData.lastName}
+                                    onChange={handleChange}
                                     className="transition-colors focus-visible:ring-primary"
-                                    placeholder="Enter your password"
+                                    disabled={isPending}
                                 />
                             </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                            <Label htmlFor="email" className="text-sm font-medium">
+                                Email *
+                            </Label>
+                            <Input
+                                id="email"
+                                type="email"
+                                placeholder="m@example.com"
+                                required
+                                value={formData.email}
+                                onChange={handleChange}
+                                className="transition-colors focus-visible:ring-primary"
+                                disabled={isPending}
+                            />
+                        </div>
+                        
+                        <div className="space-y-2">
+                            <Label htmlFor="password" className="text-sm font-medium">
+                                Password *
+                            </Label>
+                            <Input 
+                                id="password" 
+                                type="password" 
+                                required
+                                value={formData.password}
+                                onChange={handleChange}
+                                className="transition-colors focus-visible:ring-primary"
+                                placeholder="Enter your password"
+                                disabled={isPending}
+                            />
                         </div>
                     </form>
                 </CardContent>
@@ -105,8 +173,9 @@ export function SignUp() {
                         type="submit" 
                         className="w-full bg-primary hover:bg-primary/90 h-11 text-sm font-medium"
                         onClick={handleSubmit}
+                        disabled={isPending}
                     >
-                        Create Account
+                        {isPending ? "Creating Account..." : "Create Account"}
                     </Button>
                     
                     <div className="text-center space-y-2">

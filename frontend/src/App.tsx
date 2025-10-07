@@ -9,7 +9,7 @@ import Profile from "@/pages/Profile";
 import Settings from "@/pages/Settings";
 import { SignIn } from "./pages/Signin";
 import { SignUp } from "./pages/SignUp";
-import { InputOTPForm } from "./pages/InputOTP";
+import { OTPPage } from "./pages/InputOTP";
 
 function App() {
   return (
@@ -23,7 +23,7 @@ function App() {
             <Route path="/settings" element={<Settings />} />
             <Route path="/signin" element={<SignIn />} />
             <Route path="/signup" element={<SignUp />} />
-            <Route path="/otp" element={<InputOTPForm />} />
+            <Route path="/otp" element={<OTPPage />} />
           </Routes>
         </Layout>
       </Router>
