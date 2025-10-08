@@ -1,4 +1,5 @@
-import { Button } from "@/components/ui/button"
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import {
     Card,
     CardContent,
@@ -6,18 +7,67 @@ import {
     CardFooter,
     CardHeader,
     CardTitle,
-} from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { useNavigate } from "react-router-dom"
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useNavigate, useLocation } from "react-router-dom";
+import { useLogin } from "@/hooks/useUserQueries";
+import { toast } from "react-hot-toast";
 
 export function SignIn() {
-    const navigate = useNavigate()
+    const navigate = useNavigate();
+    const location = useLocation();
+    const [formData, setFormData] = useState({
+        email: "",
+        password: "",
+    });
+
+    const { mutate: login, isPending } = useLogin();
+
+    // Check for verification success message from navigation state
+    useState(() => {
+        if (location.state?.message) {
+            toast.success(location.state.message);
+            // Clear the state to prevent showing again on refresh
+            window.history.replaceState({}, document.title);
+        }
+    });
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { id, value } = e.target;
+        setFormData(prev => ({ ...prev, [id]: value }));
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault()
-        // Handle form submission here
-    }
+        e.preventDefault();
+
+        login(
+            {
+                email: formData.email,
+                password: formData.password,
+            },
+            {
+                onSuccess: () => {
+                    toast.success("Logged in successfully!");
+                    // Navigate to home page
+                    navigate("/"); 
+                },
+                onError: (err: any) => {
+                    console.error("Login error:", err);
+                    const message =
+                        err?.response?.data?.error ||
+                        err?.response?.data?.message ||
+                        err?.message ||
+                        "Login failed. Please try again.";
+                    toast.error(message);
+                },
+            }
+        );
+    };
+
+    const handleForgotPassword = () => {
+        navigate("/forgot-password"); // Create this route if needed
+    };
 
     return (
         <div className="min-h-screen flex items-center justify-center p-4">
@@ -43,55 +93,61 @@ export function SignIn() {
                 </CardHeader>
                 
                 <CardContent className="space-y-5">
-                    <form onSubmit={handleSubmit}>
-                        <div className="space-y-5">
-                            <div className="space-y-2">
-                                <Label htmlFor="email" className="text-sm font-medium">
-                                    Email address
-                                </Label>
-                                <Input
-                                    id="email"
-                                    type="email"
-                                    placeholder="m@example.com"
-                                    required
-                                    className="transition-colors focus-visible:ring-primary h-11"
-                                />
-                            </div>
-                            
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                    <Label htmlFor="password" className="text-sm font-medium">
-                                        Password
-                                    </Label>
-                                    <Button
-                                        type="button"
-                                        variant="link"
-                                        className="p-0 h-auto text-xs text-primary hover:text-primary/80"
-                                    >
-                                        Forgot your password?
-                                    </Button>
-                                </div>
-                                <Input 
-                                    id="password" 
-                                    type="password" 
-                                    required
-                                    placeholder="Enter your password"
-                                    className="transition-colors focus-visible:ring-primary h-11"
-                                />
-                            </div>
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                        <div className="space-y-2">
+                            <Label htmlFor="email" className="text-sm font-medium">
+                                Email address
+                            </Label>
+                            <Input
+                                id="email"
+                                type="email"
+                                placeholder="m@example.com"
+                                required
+                                value={formData.email}
+                                onChange={handleChange}
+                                className="transition-colors focus-visible:ring-primary h-11"
+                                disabled={isPending}
+                            />
                         </div>
+                        
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="password" className="text-sm font-medium">
+                                    Password
+                                </Label>
+                                <Button
+                                    type="button"
+                                    variant="link"
+                                    className="p-0 h-auto text-xs text-primary hover:text-primary/80"
+                                    onClick={handleForgotPassword}
+                                    disabled={isPending}
+                                >
+                                    Forgot your password?
+                                </Button>
+                            </div>
+                            <Input 
+                                id="password" 
+                                type="password" 
+                                required
+                                placeholder="Enter your password"
+                                value={formData.password}
+                                onChange={handleChange}
+                                className="transition-colors focus-visible:ring-primary h-11"
+                                disabled={isPending}
+                            />
+                        </div>
+
+                        <Button 
+                            type="submit" 
+                            className="w-full bg-primary hover:bg-primary/90 h-11 text-sm font-medium"
+                            disabled={isPending}
+                        >
+                            {isPending ? "Signing In..." : "Sign In"}
+                        </Button>
                     </form>
                 </CardContent>
                 
                 <CardFooter className="flex-col gap-4 pt-2">
-                    <Button 
-                        type="submit" 
-                        className="w-full bg-primary hover:bg-primary/90 h-11 text-sm font-medium"
-                        onClick={handleSubmit}
-                    >
-                        Sign In
-                    </Button>
-                    
                     <div className="text-center">
                         <p className="text-xs text-muted-foreground">
                             By continuing, you agree to our{" "}
@@ -107,5 +163,5 @@ export function SignIn() {
                 </CardFooter>
             </Card>
         </div>
-    )
+    );
 }

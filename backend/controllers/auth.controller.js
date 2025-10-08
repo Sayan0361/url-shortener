@@ -197,11 +197,8 @@ export const verifyVerificationCode = async (req, res) => {
             process.env.HMAC_VERIFICATION_CODE_SECRET
         );
 
-        // Use timing-safe comparison
-        if (!crypto.timingSafeEqual(
-            Buffer.from(hashedCodeValue),
-            Buffer.from(user.verificationCode)
-        )) {
+        // Use simple comparison for now to debug
+        if (hashedCodeValue !== user.verificationCode) {
             return errorResponse(res, 400, "Invalid verification code");
         }
 
@@ -243,9 +240,10 @@ export const login = async (req, res) => {
             return errorResponse(res, 403, "Please verify your email before logging in");
         }
 
-        // Verify password
-        const isPasswordValid = await comparePasswords(password, user.password, user.salt);
-        if (!isPasswordValid) {
+        // Verify password with simple comparison for debugging
+        const { password: computedHash } = await hashPasswordWithSalt(password, user.salt);
+
+        if (computedHash !== user.password) {
             return errorResponse(res, 400, "Invalid email or password");
         }
 
@@ -319,9 +317,13 @@ export const changePassword = async (req, res) => {
             return errorResponse(res, 401, "Account not verified");
         }
 
-        // Verify old password
-        const isOldPasswordValid = await comparePasswords(oldPassword, user.password, user.salt);
-        if (!isOldPasswordValid) {
+        // Verify old password with simple comparison
+        const { password: hashedOldPassword } = await hashPasswordWithSalt(
+            oldPassword,
+            user.salt
+        );
+
+        if (hashedOldPassword !== user.password) {
             return errorResponse(res, 401, "Invalid old password");
         }
 
@@ -453,16 +455,13 @@ export const verifyForgotPasswordCode = async (req, res) => {
             return errorResponse(res, 400, "Reset code has expired");
         }
 
-        // Verify code
+        // Verify code with simple comparison
         const hashedProvidedCode = await hmacProcess(
             providedCode.toString(),
             process.env.HMAC_VERIFICATION_CODE_SECRET
         );
 
-        if (!crypto.timingSafeEqual(
-            Buffer.from(hashedProvidedCode),
-            Buffer.from(user.forgotPasswordCode)
-        )) {
+        if (hashedProvidedCode !== user.forgotPasswordCode) {
             return errorResponse(res, 400, "Invalid reset code");
         }
 
