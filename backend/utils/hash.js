@@ -17,4 +17,10 @@ export const hmacProcess = async(value,key) =>{
     return result;
 }
 
-
+export const comparePasswords = async (plainPassword, hashedPassword, salt) => {
+    const { password: computedHash } = await hashPasswordWithSalt(plainPassword, salt);
+    return crypto.timingSafeEqual(
+        Buffer.from(computedHash),
+        Buffer.from(hashedPassword)
+    );
+};

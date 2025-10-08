@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { useVerifyVerificationCode, useSendVerificationCode } from "@/hooks/useUserQueries"
-import { toast } from "sonner"
+import toast from "react-hot-toast"
 import {
     InputOTP,
     InputOTPGroup,
@@ -15,26 +15,11 @@ export function OTPPage() {
     const location = useLocation()
     const navigate = useNavigate()
     const [otp, setOtp] = useState("")
-    
+
     const { mutate: verifyCode, isPending: isVerifying } = useVerifyVerificationCode()
     const { mutate: sendCode, isPending: isSending } = useSendVerificationCode()
 
     const email = location.state?.email
-    const purpose = location.state?.purpose || "verify-email"
-
-    // Auto-send verification code when component mounts
-    useEffect(() => {
-        if (email && purpose === "verify-email") {
-            sendCode(email, {
-                onSuccess: () => {
-                    toast.success("Verification code sent to your email!")
-                },
-                onError: (err: any) => {
-                    toast.error(err?.response?.data?.message || "Failed to send code")
-                }
-            })
-        }
-    }, [email, purpose, sendCode])
 
     useEffect(() => {
         if (!email) {
@@ -60,30 +45,35 @@ export function OTPPage() {
             return
         }
 
-        // Convert string OTP to number
         const otpNumber = parseInt(otp, 10)
-        
-        // Check if conversion was successful
+
         if (isNaN(otpNumber)) {
             toast.error("Invalid verification code")
             return
         }
 
         verifyCode(
-            { 
-                email, 
-                providedCode: otpNumber // Send as number
-            },
+            { email, providedCode: otpNumber },
             {
-                onSuccess: () => {
-                    toast.success("Email verified successfully!")
-                    navigate("/signin", { 
-                        state: { message: "Your account has been verified. Please sign in." }
+                onSuccess: (res: any) => {
+                    // Show success toast with longer duration
+                    toast.success(res?.message || "Email verified successfully!", {
+                        duration: 3000, // 3 seconds
                     })
+
+                    // Wait longer before navigation to ensure user sees the toast
+                    setTimeout(() => {
+                        navigate("/signin", {
+                            state: { 
+                                message: "Your account has been verified. Please sign in.",
+                                showToast: true // Add flag for signin page to show toast
+                            },
+                        })
+                    }, 2000) // 2 seconds delay
                 },
                 onError: (err: any) => {
+                    console.error("Verification error:", err); // Add console log for debugging
                     toast.error(err?.response?.data?.message || "Verification failed")
-                    // Clear OTP on error for better UX
                     setOtp("")
                 },
             }
@@ -108,7 +98,7 @@ export function OTPPage() {
                         </CardDescription>
                     </div>
                 </CardHeader>
-                
+
                 <CardContent className="space-y-6">
                     <div className="flex justify-center">
                         <InputOTP
@@ -116,6 +106,7 @@ export function OTPPage() {
                             value={otp}
                             onChange={(value) => setOtp(value)}
                             disabled={isVerifying}
+                            autoFocus
                         >
                             <InputOTPGroup className="gap-2">
                                 <InputOTPSlot index={0} className="w-12 h-12 text-lg border-2" />
@@ -137,9 +128,9 @@ export function OTPPage() {
                         )}
                     </div>
                 </CardContent>
-                
+
                 <CardFooter className="flex-col gap-4 pt-4">
-                    <Button 
+                    <Button
                         className="w-full bg-primary hover:bg-primary/90 h-11 text-sm font-medium"
                         onClick={handleVerify}
                         disabled={isVerifying || otp.length !== 6}

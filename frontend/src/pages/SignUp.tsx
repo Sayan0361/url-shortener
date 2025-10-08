@@ -1,6 +1,7 @@
-import { useState } from "react"
-import { useNavigate } from "react-router-dom"
-import { Button } from "@/components/ui/button"
+import { useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
+import { Button } from "@/components/ui/button";
 import {
     Card,
     CardContent,
@@ -8,32 +9,37 @@ import {
     CardFooter,
     CardHeader,
     CardTitle,
-} from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { useSignup, useSendVerificationCode } from "@/hooks/useUserQueries"
-import { toast } from "sonner"
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useSignup, useSendVerificationCode } from "@/hooks/useUserQueries";
 
 export function SignUp() {
-    const navigate = useNavigate()
-    const { mutate: signup, isPending: isSigningUp } = useSignup()
-    const { mutate: sendVerificationCode, isPending: isSendingCode } = useSendVerificationCode()
-
+    const navigate = useNavigate();
     const [formData, setFormData] = useState({
         firstName: "",
         lastName: "",
         email: "",
         password: "",
-    })
+    });
+    
+    // Use ref to track if signup was successful to prevent duplicate sends
+    const signupSuccessRef = useRef(false);
 
-    const isPending = isSigningUp || isSendingCode
+    const { mutate: signup, isPending: isSigningUp } = useSignup();
+    const { mutate: sendVerificationCode, isPending: isSendingCode } = useSendVerificationCode();
+    const isPending = isSigningUp || isSendingCode;
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setFormData({ ...formData, [e.target.id]: e.target.value })
-    }
+        const { id, value } = e.target;
+        setFormData(prev => ({ ...prev, [id]: value }));
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault()
+        e.preventDefault();
+        
+        // Reset the ref
+        signupSuccessRef.current = false;
 
         signup(
             {
@@ -44,38 +50,46 @@ export function SignUp() {
             },
             {
                 onSuccess: () => {
-                    // After successful signup, send verification code
+                    // Prevent multiple executions
+                    if (signupSuccessRef.current) return;
+                    signupSuccessRef.current = true;
+                    
+                    toast.success("Account created successfully!");
+
+                    // Send verification code
                     sendVerificationCode(formData.email, {
                         onSuccess: () => {
-                            toast.success("Account created! Verification code sent to your email.")
-                            // Redirect to OTP page with email as state
-                            navigate("/otp", { 
-                                state: { 
+                            toast.success("Verification code sent to your email!");
+                            navigate("/otp", {
+                                state: {
                                     email: formData.email,
-                                    purpose: "verify-email"
-                                }
-                            })
+                                    purpose: "verify-email",
+                                },
+                            });
                         },
-                        onError: () => {
-                            // Even if code sending fails, still redirect to OTP page
-                            // User can request a new code from there
-                            toast.error("Account created but failed to send verification code. You can request a new code on the next page.")
-                            navigate("/otp", { 
-                                state: { 
+                        onError: (error: any) => {
+                            console.error(error);
+                            toast.error("Failed to send verification code. You can retry on the next page.");
+                            navigate("/otp", {
+                                state: {
                                     email: formData.email,
-                                    purpose: "verify-email"
-                                }
-                            })
+                                    purpose: "verify-email",
+                                },
+                            });
                         },
-                    })
+                    });
                 },
                 onError: (err: any) => {
-                    const message = err?.response?.data?.message || "Signup failed."
-                    toast.error(message)
+                    console.error("Signup error:", err);
+                    const message =
+                        err?.response?.data?.message ||
+                        err?.message ||
+                        "Signup failed. Please try again.";
+                    toast.error(message);
                 },
             }
-        )
-    }
+        );
+    };
 
     return (
         <div className="min-h-screen flex items-center justify-center p-4">
@@ -90,8 +104,8 @@ export function SignUp() {
                         </CardDescription>
                     </div>
                     <div className="flex justify-center">
-                        <Button 
-                            onClick={() => navigate("/signin")} 
+                        <Button
+                            onClick={() => navigate("/signin")}
                             variant="link"
                             className="text-sm text-primary hover:text-primary/80"
                         >
@@ -99,7 +113,7 @@ export function SignUp() {
                         </Button>
                     </div>
                 </CardHeader>
-                
+
                 <CardContent className="space-y-4">
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
@@ -133,7 +147,7 @@ export function SignUp() {
                                 />
                             </div>
                         </div>
-                        
+
                         <div className="space-y-2">
                             <Label htmlFor="email" className="text-sm font-medium">
                                 Email *
@@ -149,14 +163,14 @@ export function SignUp() {
                                 disabled={isPending}
                             />
                         </div>
-                        
+
                         <div className="space-y-2">
                             <Label htmlFor="password" className="text-sm font-medium">
                                 Password *
                             </Label>
-                            <Input 
-                                id="password" 
-                                type="password" 
+                            <Input
+                                id="password"
+                                type="password"
                                 required
                                 value={formData.password}
                                 onChange={handleChange}
@@ -165,19 +179,18 @@ export function SignUp() {
                                 disabled={isPending}
                             />
                         </div>
+                        
+                        <Button
+                            type="submit"
+                            className="w-full bg-primary hover:bg-primary/90 h-11 text-sm font-medium"
+                            disabled={isPending}
+                        >
+                            {isPending ? "Creating Account..." : "Create Account"}
+                        </Button>
                     </form>
                 </CardContent>
-                
+
                 <CardFooter className="flex-col gap-4 pt-4">
-                    <Button 
-                        type="submit" 
-                        className="w-full bg-primary hover:bg-primary/90 h-11 text-sm font-medium"
-                        onClick={handleSubmit}
-                        disabled={isPending}
-                    >
-                        {isPending ? "Creating Account..." : "Create Account"}
-                    </Button>
-                    
                     <div className="text-center space-y-2">
                         <p className="text-xs text-muted-foreground leading-relaxed">
                             By creating an account, you agree to our{" "}
@@ -190,11 +203,11 @@ export function SignUp() {
                             </Button>
                         </p>
                         <p className="text-xs text-muted-foreground leading-relaxed">
-                            * We'll send a verification code to your email to confirm your account
+                            * A verification code will be sent to your email
                         </p>
                     </div>
                 </CardFooter>
             </Card>
         </div>
-    )
+    );
 }

@@ -8,41 +8,53 @@ import {
     loginBodySchema,
     signupBodySchema,
 } from "../validation/request.validation.js";
-import { hashPasswordWithSalt, hmacProcess } from "../utils/hash.js";
+import { hashPasswordWithSalt, hmacProcess, comparePasswords } from "../utils/hash.js";
 import { getUserByEmail } from "../services/user.service.js";
 import { createUserToken } from "../utils/token.js";
 import { transport } from "../middlewares/sendMail.js";
 import { eq } from "drizzle-orm";
+import crypto from 'crypto';
+
+// Helper function for consistent error responses
+const errorResponse = (res, status, message) => {
+    return res.status(status).json({
+        success: false,
+        error: message
+    });
+};
+
+// Helper function for success responses
+const successResponse = (res, status, message, data = null) => {
+    const response = {
+        success: true,
+        message
+    };
+    if (data) response.data = data;
+    return res.status(status).json(response);
+};
 
 export const signup = async (req, res) => {
     try {
         const validationResult = await signupBodySchema.safeParseAsync(req.body);
-        if (validationResult.error) {
-            return res.status(400).json({
-                error: validationResult.error.format(),
-            });
+        if (!validationResult.success) {
+            return errorResponse(res, 400, "Invalid input data");
         }
 
         const { firstname, lastname, email, password } = validationResult.data;
 
         const existingUser = await getUserByEmail(email);
-
         if (existingUser) {
-            return res.status(400).json({
-                error: `User with this email:${email} already exists!`,
-            });
+            return errorResponse(res, 400, `User with email ${email} already exists`);
         }
 
-        const { salt, password: hashedPassword } = await hashPasswordWithSalt(
-            password
-        );
+        const { salt, password: hashedPassword } = await hashPasswordWithSalt(password);
 
         const [user] = await db
             .insert(usersTable)
             .values({
-                firstname,
-                lastname,
-                email,
+                firstname: firstname.trim(),
+                lastname: lastname.trim(),
+                email: email.toLowerCase().trim(),
                 password: hashedPassword,
                 salt,
             })
@@ -55,96 +67,26 @@ export const signup = async (req, res) => {
             throw new Error("Failed to create user");
         }
 
-        return res.status(201).json({
-            success: true,
-            message: `User created with this email: ${email}`,
-            data: {
-                userId: user.id,
-            },
+        return successResponse(res, 201, `User created successfully`, {
+            userId: user.id,
+            email: user.email
         });
     } catch (error) {
-        console.log(error);
-        return res.status(500).json({
-            error: error.message || "Failed to create user",
-        });
-    }
-};
-
-export const login = async (req, res) => {
-    try {
-        const validationResult = await loginBodySchema.safeParseAsync(req.body);
-        if (validationResult.error) {
-            return res.status(400).json({
-                error: validationResult.error.format(),
-            });
-        }
-        const { email, password } = validationResult.data;
-
-        const user = await getUserByEmail(email);
-
-        if (!user) {
-            return res.status(400).json({
-                error: `User with this email doesn't exist!`,
-            });
-        }
-
-        const { password: hashedInputPassword } = await hashPasswordWithSalt(
-            password,
-            user.salt
-        );
-
-        if (hashedInputPassword !== user.password) {
-            return res.status(400).json({
-                error: `Invalid password`,
-            });
-        }
-
-        const token = await createUserToken({
-            id: user.id,
-        });
-
-        // Set cookie with proper spacing after 'Bearer'
-        res.cookie("Authorization", `Bearer ${token}`, {
-            expires: new Date(Date.now() + 8 * 60 * 60 * 1000),
-            httpOnly: process.env.NODE_ENV === "production",
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "strict",
-        });
-
-        return res.status(200).json({
-            success: true,
-            message: `Logged in Successfully`,
-            data: {
-                token,
-            },
-        });
-    } catch (error) {
-        console.log(error);
-        return res.status(500).json({ error: error.message });
-    }
-};
-
-export const logout = async (req, res) => {
-    try {
-        res.clearCookie("Authorization").status(200).json({
-            success: true,
-            message: "Logged out successfully",
-        });
-    } catch (error) {
-        console.log(error);
-        res.status(500).json({ error: error.message });
+        console.error("Signup error:", error);
+        return errorResponse(res, 500, "Failed to create user");
     }
 };
 
 export const sendVerificationCode = async (req, res) => {
     try {
         const { email } = req.body;
+
         if (!email) {
-            return res
-                .status(400)
-                .json({ success: false, message: "Email is required" });
+            return errorResponse(res, 400, "Email is required");
         }
-        // Fetch the user by email
+
+        const normalizedEmail = email.toLowerCase().trim();
+
         const [user] = await db
             .select({
                 id: usersTable.id,
@@ -152,25 +94,18 @@ export const sendVerificationCode = async (req, res) => {
                 verified: usersTable.verified,
             })
             .from(usersTable)
-            .where(eq(usersTable.email, email));
+            .where(eq(usersTable.email, normalizedEmail));
 
         if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: `User with this email (${email}) doesn't exist.`,
-            });
+            return errorResponse(res, 404, `User with email ${normalizedEmail} doesn't exist`);
         }
 
         if (user.verified) {
-            return res.status(400).json({
-                success: false,
-                message: "User is already verified.",
-            });
+            return errorResponse(res, 400, "User is already verified");
         }
-        // Generate a 6-digit verification code
-        const codeValue = Math.floor(100000 + Math.random() * 900000).toString();
 
-        // Hash the code before storing
+        // Generate cryptographically secure random code
+        const codeValue = crypto.randomInt(100000, 999999).toString();
         const hashedCodeValue = await hmacProcess(
             codeValue,
             process.env.HMAC_VERIFICATION_CODE_SECRET
@@ -181,53 +116,52 @@ export const sendVerificationCode = async (req, res) => {
             .update(usersTable)
             .set({
                 verificationCode: hashedCodeValue,
-                verificationCodeValidation: Math.floor(Date.now() / 1000), // store Unix time
+                verificationCodeValidation: Math.floor(Date.now() / 1000),
+                updatedAt: new Date(),
             })
-            .where(eq(usersTable.email, email));
+            .where(eq(usersTable.email, normalizedEmail));
 
-        // Send email using Nodemailer
-        const info = await transport.sendMail({
-            from: process.env.NODE_CODE_SENDING_EMAIL_ADDRESS,
-            to: email,
-            subject: "Your Verification Code",
-            html: `
-                <div style="font-family: Arial, sans-serif; text-align: center;">
-                <h2>Your Verification Code</h2>
-                <p style="font-size: 22px; font-weight: bold;">${codeValue}</p>
-                <p>This code will expire in 5 minutes.</p>
-                </div>
-            `,
-        });
+        // Send email
+        try {
+            const info = await transport.sendMail({
+                from: process.env.NODE_CODE_SENDING_EMAIL_ADDRESS,
+                to: normalizedEmail,
+                subject: "Your Verification Code",
+                html: `
+                    <div style="font-family: Arial, sans-serif; text-align: center;">
+                    <h2>Your Verification Code</h2>
+                    <p style="font-size: 22px; font-weight: bold;">${codeValue}</p>
+                    <p>This code will expire in 5 minutes.</p>
+                    </div>
+                `,
+            });
 
-        if (info.accepted.includes(email)) {
-            return res.status(200).json({
-                success: true,
-                message: "Verification code sent successfully to your email.",
-            });
-        } else {
-            return res.status(400).json({
-                success: false,
-                message: "Failed to send verification email.",
-            });
+            if (info.accepted.includes(normalizedEmail)) {
+                return successResponse(res, 200, "Verification code sent successfully");
+            } else {
+                return errorResponse(res, 500, "Failed to send verification email");
+            }
+        } catch (emailError) {
+            console.error("Email error:", emailError);
+            return errorResponse(res, 500, "Failed to send verification email");
         }
     } catch (error) {
-        console.log(error);
-        res.status(500).json({ error: error.message });
+        console.error("Send verification code error:", error);
+        return errorResponse(res, 500, "Internal server error");
     }
 };
 
 export const verifyVerificationCode = async (req, res) => {
     try {
         const validationResult = await acceptCodeSchema.safeParseAsync(req.body);
-        if (validationResult.error) {
-            return res.status(400).json({
-                error: validationResult.error.format(),
-            });
+        if (!validationResult.success) {
+            return errorResponse(res, 400, "Invalid input data");
         }
+
         const { email, providedCode } = validationResult.data;
+        const normalizedEmail = email.toLowerCase().trim();
         const code = providedCode.toString();
 
-        // Fetch the user by email
         const [user] = await db
             .select({
                 id: usersTable.id,
@@ -237,70 +171,119 @@ export const verifyVerificationCode = async (req, res) => {
                 verificationCodeValidation: usersTable.verificationCodeValidation,
             })
             .from(usersTable)
-            .where(eq(usersTable.email, email));
+            .where(eq(usersTable.email, normalizedEmail));
 
         if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: `User with this email (${email}) doesn't exist.`,
-            });
+            return errorResponse(res, 404, `User with email ${normalizedEmail} doesn't exist`);
         }
 
         if (user.verified) {
-            return res.status(400).json({
-                success: false,
-                message: "User is already verified.",
-            });
+            return errorResponse(res, 400, "User is already verified");
         }
 
-        // Check if verification fields exist
         if (!user.verificationCode || !user.verificationCodeValidation) {
-            return res.status(400).json({
-                success: false,
-                message: "Verification code not found or invalid.",
-            });
+            return errorResponse(res, 400, "Verification code not found or invalid");
         }
 
-        // Check if code expired (5 min = 300 seconds)
+        // Check expiration (5 minutes)
         const currentTime = Math.floor(Date.now() / 1000);
-        if (currentTime - user.verificationCodeValidation > 5 * 60) {
-            return res.status(400).json({
-                success: false,
-                message:
-                    "Sir, what were you doing all this time? Verification code has expired!!",
-            });
+        if (currentTime - user.verificationCodeValidation > 300) { // 5 minutes
+            return errorResponse(res, 400, "Verification code has expired");
         }
-        // Hash the provided code for comparison
+
+        // Verify code
         const hashedCodeValue = await hmacProcess(
             code,
             process.env.HMAC_VERIFICATION_CODE_SECRET
         );
 
-        if (hashedCodeValue === user.verificationCode) {
-            // Update user as verified and clear codes
-            await db
-                .update(usersTable)
-                .set({
-                    verified: true,
-                    verificationCode: null,
-                    verificationCodeValidation: null,
-                    updatedAt: new Date(),
-                })
-                .where(eq(usersTable.email, email));
-
-            return res.status(200).json({
-                success: true,
-                message: "Your account has been verified successfully.",
-            });
-        } else {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid verification code.",
-            });
+        // Use timing-safe comparison
+        if (!crypto.timingSafeEqual(
+            Buffer.from(hashedCodeValue),
+            Buffer.from(user.verificationCode)
+        )) {
+            return errorResponse(res, 400, "Invalid verification code");
         }
+
+        // Update user as verified
+        await db
+            .update(usersTable)
+            .set({
+                verified: true,
+                verificationCode: null,
+                verificationCodeValidation: null,
+                updatedAt: new Date(),
+            })
+            .where(eq(usersTable.email, normalizedEmail));
+
+        return successResponse(res, 200, "Account verified successfully");
     } catch (error) {
-        console.log(error);
-        res.status(500).json({ error: error.message });
+        console.error("Verify verification code error:", error);
+        return errorResponse(res, 500, "Internal server error");
+    }
+};
+
+export const login = async (req, res) => {
+    try {
+        const validationResult = await loginBodySchema.safeParseAsync(req.body);
+        if (!validationResult.success) {
+            return errorResponse(res, 400, "Invalid email or password");
+        }
+
+        const { email, password } = validationResult.data;
+        const normalizedEmail = email.toLowerCase().trim();
+
+        const user = await getUserByEmail(normalizedEmail);
+
+        if (!user) {
+            return errorResponse(res, 400, "Invalid email or password");
+        }
+
+        if (!user.verified) {
+            return errorResponse(res, 403, "Please verify your email before logging in");
+        }
+
+        // Verify password
+        const isPasswordValid = await comparePasswords(password, user.password, user.salt);
+        if (!isPasswordValid) {
+            return errorResponse(res, 400, "Invalid email or password");
+        }
+
+        // Create JWT token
+        const token = await createUserToken({
+            id: user.id,
+            email: user.email
+        });
+
+        // Set secure cookie
+        res.cookie("Authorization", `Bearer ${token}`, {
+            expires: new Date(Date.now() + 8 * 60 * 60 * 1000), // 8 hours
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "strict",
+            path: "/",
+        });
+
+        return successResponse(res, 200, "Logged in successfully");
+    } catch (error) {
+        console.error("Login error:", error);
+        return errorResponse(res, 500, "Internal server error");
+    }
+};
+
+export const logout = async (req, res) => {
+    try {
+        res.clearCookie("Authorization", {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "strict",
+            path: "/",
+        });
+
+        return successResponse(res, 200, "Logged out successfully");
+    } catch (error) {
+        console.error("Logout error:", error);
+        return errorResponse(res, 500, "Internal server error");
     }
 };
 
@@ -309,20 +292,15 @@ export const changePassword = async (req, res) => {
         const { id: userId } = req.user;
         const { oldPassword, newPassword } = req.body;
 
-        // Validate request body
         const validationResult = await changePasswordSchema.safeParseAsync({
             oldPassword,
             newPassword,
         });
 
-        if (validationResult.error) {
-            return res.status(400).json({
-                success: false,
-                message: validationResult.error.format(),
-            });
+        if (!validationResult.success) {
+            return errorResponse(res, 400, "Invalid input data");
         }
 
-        // Fetch user by ID
         const [user] = await db
             .select({
                 id: usersTable.id,
@@ -334,35 +312,22 @@ export const changePassword = async (req, res) => {
             .where(eq(usersTable.id, userId));
 
         if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: "User not found.",
-            });
+            return errorResponse(res, 404, "User not found");
         }
 
         if (!user.verified) {
-            return res
-                .status(401)
-                .json({ success: false, message: "You are not a verified user." });
+            return errorResponse(res, 401, "Account not verified");
         }
 
-        // Compare old password
-        const { password: hashedOldPassword } = await hashPasswordWithSalt(
-            oldPassword,
-            user.salt
-        );
-
-        if (hashedOldPassword !== user.password) {
-            return res
-                .status(401)
-                .json({ success: false, message: "Invalid old password." });
+        // Verify old password
+        const isOldPasswordValid = await comparePasswords(oldPassword, user.password, user.salt);
+        if (!isOldPasswordValid) {
+            return errorResponse(res, 401, "Invalid old password");
         }
 
-        // Hash new password with a fresh salt
-        const { salt: newSalt, password: hashedNewPassword } =
-            await hashPasswordWithSalt(newPassword);
+        // Hash new password
+        const { salt: newSalt, password: hashedNewPassword } = await hashPasswordWithSalt(newPassword);
 
-        // Update password in DB
         await db
             .update(usersTable)
             .set({
@@ -372,16 +337,10 @@ export const changePassword = async (req, res) => {
             })
             .where(eq(usersTable.id, userId));
 
-        return res.status(200).json({
-            success: true,
-            message: "Password updated successfully.",
-        });
+        return successResponse(res, 200, "Password updated successfully");
     } catch (error) {
-        console.error("Error changing password:", error);
-        return res.status(500).json({
-            success: false,
-            error: error.message,
-        });
+        console.error("Change password error:", error);
+        return errorResponse(res, 500, "Internal server error");
     }
 };
 
@@ -390,157 +349,126 @@ export const sendForgotPasswordCode = async (req, res) => {
         const { email } = req.body;
 
         if (!email) {
-            return res.status(400).json({
-                success: false,
-                message: "Email is required.",
-            });
+            return errorResponse(res, 400, "Email is required");
         }
 
-        // Check if user exists
+        const normalizedEmail = email.toLowerCase().trim();
+
         const [user] = await db
             .select({
                 id: usersTable.id,
                 email: usersTable.email,
+                verified: usersTable.verified,
             })
             .from(usersTable)
-            .where(eq(usersTable.email, email));
+            .where(eq(usersTable.email, normalizedEmail));
 
         if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: `User with this email (${email}) doesn't exist.`,
-            });
+            // Don't reveal whether user exists for security
+            return successResponse(res, 200, "If the email exists, a reset code has been sent");
         }
 
-        // Generate random 6-digit code
-        const codeValue = Math.floor(100000 + Math.random() * 900000).toString();
+        if (!user.verified) {
+            return errorResponse(res, 400, "Account not verified");
+        }
 
-        // Hash the code using HMAC
+        // Generate secure random code
+        const codeValue = crypto.randomInt(100000, 999999).toString();
         const hashedCodeValue = await hmacProcess(
             codeValue,
             process.env.HMAC_VERIFICATION_CODE_SECRET
         );
 
-        // Update user's forgot password fields
         await db
             .update(usersTable)
             .set({
                 forgotPasswordCode: hashedCodeValue,
-                forgotPasswordCodeValidation: Math.floor(Date.now() / 1000), // Unix time
+                forgotPasswordCodeValidation: Math.floor(Date.now() / 1000),
                 updatedAt: new Date(),
             })
-            .where(eq(usersTable.email, email));
+            .where(eq(usersTable.email, normalizedEmail));
 
-        // Send email with the code
-        const info = await transport.sendMail({
-            from: process.env.NODE_CODE_SENDING_EMAIL_ADDRESS,
-            to: email,
-            subject: "Forgot Password Code",
-            html: `
+        // Send email
+        try {
+            const info = await transport.sendMail({
+                from: process.env.NODE_CODE_SENDING_EMAIL_ADDRESS,
+                to: normalizedEmail,
+                subject: "Password Reset Code",
+                html: `
                     <div style="font-family: Arial, sans-serif; text-align: center;">
-                    <h2>Forgot Password Request</h2>
+                    <h2>Password Reset Request</h2>
                     <p style="font-size: 18px;">Your password reset code is:</p>
                     <p style="font-size: 24px; font-weight: bold; letter-spacing: 2px;">${codeValue}</p>
                     <p>This code will expire in 5 minutes.</p>
                     </div>
                 `,
-        });
+            });
 
-        // Handle email success/failure
-        if (info.accepted.includes(email)) {
-            return res.status(200).json({
-                success: true,
-                message: "Forgot password code has been sent to your email.",
-            });
-        } else {
-            return res.status(400).json({
-                success: false,
-                message: "Failed to send forgot password email.",
-            });
+            if (info.accepted.includes(normalizedEmail)) {
+                return successResponse(res, 200, "Password reset code sent successfully");
+            } else {
+                return errorResponse(res, 500, "Failed to send reset email");
+            }
+        } catch (emailError) {
+            console.error("Email error:", emailError);
+            return errorResponse(res, 500, "Failed to send reset email");
         }
     } catch (error) {
-        console.error("Error sending forgot password code:", error);
-        return res.status(500).json({
-            success: false,
-            error: error.message,
-        });
+        console.error("Send forgot password code error:", error);
+        return errorResponse(res, 500, "Internal server error");
     }
 };
 
 export const verifyForgotPasswordCode = async (req, res) => {
     try {
-        const { email, providedCode, newPassword } = req.body;
-
-        // Validate input
-        const validationResult = await acceptFPCodeSchema.safeParseAsync({
-            email,
-            providedCode,
-            newPassword,
-        });
-
-        if (validationResult.error) {
-            return res.status(400).json({
-                success: false,
-                message: validationResult.error.format(),
-            });
+        const validationResult = await acceptFPCodeSchema.safeParseAsync(req.body);
+        if (!validationResult.success) {
+            return errorResponse(res, 400, "Invalid input data");
         }
 
-        // Find user
+        const { email, providedCode, newPassword } = validationResult.data;
+        const normalizedEmail = email.toLowerCase().trim();
+
         const [user] = await db
             .select({
                 id: usersTable.id,
                 email: usersTable.email,
-                password: usersTable.password,
-                salt: usersTable.salt,
                 forgotPasswordCode: usersTable.forgotPasswordCode,
                 forgotPasswordCodeValidation: usersTable.forgotPasswordCodeValidation,
             })
             .from(usersTable)
-            .where(eq(usersTable.email, email));
+            .where(eq(usersTable.email, normalizedEmail));
 
         if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: `User with email ${email} doesn't exist.`,
-            });
+            return errorResponse(res, 404, "Invalid reset request");
         }
 
         if (!user.forgotPasswordCode || !user.forgotPasswordCodeValidation) {
-            return res.status(400).json({
-                success: false,
-                message: "No valid forgot password request found. Please try again.",
-            });
+            return errorResponse(res, 400, "No valid password reset request found");
         }
 
-        // Check code expiration (5 minutes)
+        // Check expiration
         const nowUnix = Math.floor(Date.now() / 1000);
-        const timeDifference = nowUnix - user.forgotPasswordCodeValidation;
-        if (timeDifference > 5 * 60) {
-            return res.status(400).json({
-                success: false,
-                message: "Your code has expired. Please request a new one.",
-            });
+        if (nowUnix - user.forgotPasswordCodeValidation > 300) {
+            return errorResponse(res, 400, "Reset code has expired");
         }
 
-        // Compare HMAC of provided code
+        // Verify code
         const hashedProvidedCode = await hmacProcess(
             providedCode.toString(),
             process.env.HMAC_VERIFICATION_CODE_SECRET
         );
 
-        if (hashedProvidedCode !== user.forgotPasswordCode) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid forgot password code.",
-            });
+        if (!crypto.timingSafeEqual(
+            Buffer.from(hashedProvidedCode),
+            Buffer.from(user.forgotPasswordCode)
+        )) {
+            return errorResponse(res, 400, "Invalid reset code");
         }
 
-        // Hash new password with new salt
-        const { password: hashedPassword, salt } = await hashPasswordWithSalt(
-            newPassword
-        );
+        // Hash new password
+        const { password: hashedPassword, salt } = await hashPasswordWithSalt(newPassword);
 
-        // Update password and clear reset fields
         await db
             .update(usersTable)
             .set({
@@ -550,19 +478,12 @@ export const verifyForgotPasswordCode = async (req, res) => {
                 forgotPasswordCodeValidation: null,
                 updatedAt: new Date(),
             })
-            .where(eq(usersTable.email, email));
+            .where(eq(usersTable.email, normalizedEmail));
 
-        return res.status(200).json({
-            success: true,
-            message:
-                "Your forgot password code has been verified and password updated successfully.",
-        });
+        return successResponse(res, 200, "Password reset successfully");
     } catch (error) {
-        console.error("Error verifying forgot password code:", error);
-        return res.status(500).json({
-            success: false,
-            error: error.message,
-        });
+        console.error("Verify forgot password code error:", error);
+        return errorResponse(res, 500, "Internal server error");
     }
 };
 
@@ -571,57 +492,42 @@ export const changeFirstNameLastName = async (req, res) => {
         const { id: userId } = req.user;
         const { firstname, lastname } = req.body;
 
-        // Validate input
         const validationResult = await changeNameSchema.safeParseAsync({
             firstname,
             lastname,
         });
 
-        if (validationResult.error) {
-            return res.status(400).json({
-                success: false,
-                message: validationResult.error.format(),
-            });
+        if (!validationResult.success) {
+            return errorResponse(res, 400, "Invalid input data");
         }
 
-        // Check if user exists
         const [user] = await db
             .select({
                 id: usersTable.id,
-                firstname: usersTable.firstname,
-                lastname: usersTable.lastname,
             })
             .from(usersTable)
             .where(eq(usersTable.id, userId));
 
         if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: "User not found.",
-            });
+            return errorResponse(res, 404, "User not found");
         }
 
-        // Update first name and last name
         await db
             .update(usersTable)
             .set({
-                firstname,
-                lastname,
+                firstname: firstname.trim(),
+                lastname: lastname.trim(),
                 updatedAt: new Date(),
             })
             .where(eq(usersTable.id, userId));
 
-        return res.status(200).json({
-            success: true,
-            message: "Your name has been updated successfully.",
-            updatedData: { firstname, lastname },
+        return successResponse(res, 200, "Name updated successfully", {
+            firstname: firstname.trim(),
+            lastname: lastname.trim()
         });
     } catch (error) {
-        console.error("Error updating user name:", error);
-        return res.status(500).json({
-            success: false,
-            error: error.message,
-        });
+        console.error("Change name error:", error);
+        return errorResponse(res, 500, "Internal server error");
     }
 };
 
@@ -629,14 +535,6 @@ export const getUserInfo = async (req, res) => {
     try {
         const { id: userId } = req.user;
 
-        if (!userId) {
-            return res.status(401).json({
-                success: false,
-                message: "Unauthorized. Please log in again.",
-            });
-        }
-
-        // Select only non-sensitive fields
         const [user] = await db
             .select({
                 id: usersTable.id,
@@ -652,22 +550,12 @@ export const getUserInfo = async (req, res) => {
             .where(eq(usersTable.id, userId));
 
         if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: "User not found.",
-            });
+            return errorResponse(res, 404, "User not found");
         }
 
-        return res.status(200).json({
-            success: true,
-            message: "User information fetched successfully.",
-            data: user,
-        });
+        return successResponse(res, 200, "User information fetched successfully", user);
     } catch (error) {
-        console.error("Error fetching user info:", error);
-        return res.status(500).json({
-            success: false,
-            error: error.message,
-        });
+        console.error("Get user info error:", error);
+        return errorResponse(res, 500, "Internal server error");
     }
 };

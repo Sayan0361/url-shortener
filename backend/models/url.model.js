@@ -1,20 +1,26 @@
 import { timestamp, uuid, pgTable, varchar, text } from "drizzle-orm/pg-core";
 import { usersTable } from "./user.model.js";
 
-export const urlsTable = pgTable("urls",{
-    id: uuid().primaryKey().defaultRandom(),
-    userId: uuid("user_id").references(()=> usersTable.id).notNull(),
+export const urlsTable = pgTable("urls", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    
+    userId: uuid("user_id")
+        .notNull()
+        .references(() => usersTable.id, { onDelete: "cascade" }),
     
     shortCode: varchar("code", { length: 155 }).notNull().unique(),
     targetURL: text("target_url").notNull(),
 
     createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").$onUpdate(()=> new Date()),
-})
+    updatedAt: timestamp("updated_at").$onUpdate(() => new Date()),
+});
 
 export const urlAnalyticsTable = pgTable("url_analytics", {
     id: uuid("id").primaryKey().defaultRandom(),
-    urlId: uuid("url_id").notNull().references(() => urlsTable.id),
+
+    urlId: uuid("url_id")
+        .notNull()
+        .references(() => urlsTable.id, { onDelete: "cascade" }),
 
     ipAddress: varchar("ip_address", { length: 45 }),  
     region: varchar("region", { length: 100 }),

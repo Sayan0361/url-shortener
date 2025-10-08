@@ -19,6 +19,7 @@ import type {
     VerificationCodeData,
     ForgotPasswordData,
 } from "../types/types";
+import { toast } from "react-hot-toast";
 
 // -------------------- Get User Info --------------------
 export const useUserInfo = () => {
@@ -32,9 +33,20 @@ export const useUserInfo = () => {
 // -------------------- Signup/Login/Logout --------------------
 export const useSignup = () => {
     const queryClient = useQueryClient();
+
     return useMutation({
         mutationFn: (data: SignupData) => signup(data),
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ["userInfo"] }),
+        onSuccess: () => {
+            toast.success("Account created successfully!");
+            queryClient.invalidateQueries({ queryKey: ["userInfo"] });
+        },
+        onError: (err: any) => {
+            const message =
+                err?.response?.data?.message ||
+                err?.message ||
+                "Signup failed. Please try again.";
+            toast.error(message);
+        },
     });
 };
 

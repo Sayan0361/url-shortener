@@ -11,6 +11,7 @@ export const getUserByEmail = async(email) => {
                 email: usersTable.email,
                 password: usersTable.password,
                 salt: usersTable.salt,
+                verified: usersTable.verified,
             })
             .from(usersTable)
             .where(eq(usersTable.email, email));

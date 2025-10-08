@@ -10,10 +10,16 @@ import Settings from "@/pages/Settings";
 import { SignIn } from "./pages/Signin";
 import { SignUp } from "./pages/SignUp";
 import { OTPPage } from "./pages/InputOTP";
+import { Toaster } from "react-hot-toast";
 
 function App() {
   return (
     <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+      <Toaster
+        position="top-center"
+        reverseOrder={false}
+        toastOptions={{ duration: 3000 }}
+      />
       <Router>
         <Layout>
           <Routes>
