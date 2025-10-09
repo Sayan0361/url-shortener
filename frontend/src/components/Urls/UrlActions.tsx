@@ -6,7 +6,7 @@ interface UrlActionsProps {
     url: Url;
     onEdit: (url: Url) => void;
     onGenerateQR: (shortCode: string) => void;
-    onDelete: (id: string) => void;
+    onDelete: (urlId: string, urlShortCode: string) => void;
 }
 
 export const UrlActions = ({ url, onEdit, onGenerateQR, onDelete }: UrlActionsProps) => {
@@ -31,7 +31,7 @@ export const UrlActions = ({ url, onEdit, onGenerateQR, onDelete }: UrlActionsPr
             <Button
                 variant="destructive"
                 size="sm"
-                onClick={() => onDelete(url.id)}
+                onClick={() => onDelete(url.id, url.shortCode)}
             >
                 <Trash2 className="h-4 w-4 mr-2" />
                 Delete
