@@ -4,12 +4,12 @@ import { urlsTable } from "../models/index.js";
 
 export const insertShortCodeIntoTable = async(shortCode, targetURL, userId) => {
     const result = await db.insert(urlsTable).values({
-            shortCode,
-            targetURL,
-            userId,
+            shortCode: shortCode, 
+            targetURL: targetURL,
+            userId: userId,
         }).returning({
             id: urlsTable.id,
-            shortCode: urlsTable.shortCode,
+            shortCode: urlsTable.shortCode, 
             targetURL: urlsTable.targetURL
         });
     return result[0]; 
@@ -40,7 +40,7 @@ export const updateURLFromTable = async(id, userId, newURL) => {
         )
         .returning({
             id: urlsTable.id,
-            shortCode: urlsTable.shortCode,
+            shortCode: urlsTable.shortCode, 
             targetURL: urlsTable.targetURL,
         });
     return updated[0]; 
@@ -57,7 +57,7 @@ export const deleteURLFromTable = async(id, userId) => {
         )
         .returning({
             id: urlsTable.id,
-            shortCode: urlsTable.shortCode,
+            shortCode: urlsTable.shortCode, 
             targetURL: urlsTable.targetURL,
         });
     return result[0];

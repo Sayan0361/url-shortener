@@ -36,9 +36,15 @@ export const useCreateShortUrl = () => {
             toast.success("URL shortened successfully!");
         },
         onError: (err: any) => {
-            const message = err?.message || "Failed to create short URL";
+            console.log("Error object:", err); // Debug log (remove later)
+            const message =
+                err?.response?.data?.error || // backend sends { error: "..." }
+                err?.response?.data?.message || // fallback if backend uses "message"
+                err?.message ||
+                "Failed to create short URL";
             toast.error(message);
         },
+
     });
 };
 
@@ -87,7 +93,7 @@ export const useAnalytics = (id: string) => {
                 return false;
             }
             return failureCount < 3; // Retry up to 3 times
-        },  
+        },
     });
 };
 

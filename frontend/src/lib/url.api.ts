@@ -1,12 +1,18 @@
-import { axiosInstance } from "@/lib/axios"; 
-import type { ShortenData } from "@/types/types"; 
+import { axiosInstance } from "@/lib/axios";
+import type { ShortenData } from "@/types/types";
 
 // Helper to handle errors consistently
 const handleUrlError = (error: any) => {
-    console.error("URL API Error:", error.response?.data || error.message);
-    const errorData = error.response?.data || { message: "Something went wrong. Please try again." };
-    throw errorData;
+    const backendError =
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.message ||
+        "Something went wrong. Please try again.";
+
+    console.error("URL API Error:", backendError);
+    throw new Error(backendError); // ✅ throw clean error message
 };
+
 
 // Create a short URL - Fixed to match backend expectations
 export const createShortUrl = async (data: ShortenData) => {
@@ -16,9 +22,9 @@ export const createShortUrl = async (data: ShortenData) => {
             url: data.url, // Backend expects 'url'
             ...(data.code && data.code.trim() !== '' && { code: data.code }) // Only include if provided and not empty
         };
-        
+
         console.log("Sending payload to backend:", payload);
-        
+
         const response = await axiosInstance.post("/shorten", payload);
         return response.data;
     } catch (error) {
@@ -52,7 +58,7 @@ export const updateUrl = async (id: string, newURL: string) => {
         const payload = {
             url: newURL // Backend expects 'url'
         };
-        
+
         const response = await axiosInstance.put(`/update/${id}`, payload);
         return response.data;
     } catch (error) {
@@ -76,7 +82,7 @@ export const generateQRCode = async (shortCode: string) => {
         const response = await axiosInstance.get(`/qrcode/${shortCode}`, {
             responseType: "arraybuffer",
         });
-        
+
         // Convert arraybuffer to base64 for image display
         const base64 = btoa(
             new Uint8Array(response.data).reduce(

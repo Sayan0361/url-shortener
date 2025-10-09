@@ -6,7 +6,7 @@ import { Layout } from "@/components/Layout";
 import { Home } from "./pages/Home";
 import Features from "@/pages/Features";
 import Profile from "@/pages/Profile";
-import Settings from "@/pages/Settings";
+import Settings from "@/pages/MyUrls";
 import { SignIn } from "./pages/Signin";
 import { SignUp } from "./pages/SignUp";
 import { OTPPage } from "./pages/InputOTP";

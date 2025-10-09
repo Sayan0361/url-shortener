@@ -43,7 +43,7 @@ export const Home = () => {
 
     const validateUrl = (url: string): string | null => {
         if (!url) return "Please enter a URL to shorten";
-        
+
         try {
             let formattedUrl = url;
             if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
@@ -83,10 +83,11 @@ export const Home = () => {
             {
                 onSuccess: (data) => {
                     const receivedShortCode = data?.result?.shortCode;
-                    
+
                     if (receivedShortCode) {
-                        const baseUrl = window.location.origin;
-                        const shortUrl = `${baseUrl}/${receivedShortCode}`;
+                        // Use backend URL instead of frontend origin
+                        const backendUrl = import.meta.env.VITE_API_URL || "http://localhost:3000";
+                        const shortUrl = `${backendUrl}/${receivedShortCode}`;
                         setGeneratedUrl(shortUrl);
                         toast.success("URL shortened successfully!");
                     } else {
@@ -96,9 +97,14 @@ export const Home = () => {
                     }
                 },
                 onError: (err: any) => {
-                    const message = err?.response?.data?.message || err?.message || "Failed to shorten URL. Please try again.";
+                    const message = err?.response?.data?.error || err?.message || "Failed to shorten URL. Please try again.";
                     setError(message);
                     toast.error(message);
+
+                    // If it's a duplicate code error, clear the short code field
+                    if (message.includes("already exists") || message.includes("already taken")) {
+                        setShortCode("");
+                    }
                 },
             }
         );
@@ -184,12 +190,12 @@ export const Home = () => {
                     <h1 className="text-3xl font-bold">URL Shortener</h1>
                 </div>
                 <p className="mt-2 text-muted-foreground">
-                    {isLoggedIn 
+                    {isLoggedIn
                         ? "Shorten your long URLs and generate QR codes instantly."
                         : "Try our URL shortener! Sign in to save and manage your links."
                     }
                 </p>
-                
+
                 {!isLoggedIn && (
                     <div className="flex gap-3 justify-center mt-4">
                         <Button onClick={handleSignIn} className="flex items-center gap-2">
@@ -216,7 +222,7 @@ export const Home = () => {
                         )}
                     </CardTitle>
                     <CardDescription>
-                        {isLoggedIn 
+                        {isLoggedIn
                             ? "Enter your long URL and optionally a custom short code"
                             : "Try our URL shortener. Sign in to save your links and access all features."
                         }
@@ -252,7 +258,7 @@ export const Home = () => {
                                     disabled={isCreating || !isLoggedIn}
                                 />
                                 <FieldDescription>
-                                    {isLoggedIn 
+                                    {isLoggedIn
                                         ? "Leave empty for auto-generated code"
                                         : "Custom codes available after signing in"
                                     }
@@ -274,9 +280,9 @@ export const Home = () => {
                                     <p className="text-sm mt-1">
                                         Please sign in to shorten URLs and access all features.
                                     </p>
-                                    <Button 
-                                        onClick={handleSignIn} 
-                                        size="sm" 
+                                    <Button
+                                        onClick={handleSignIn}
+                                        size="sm"
                                         className="mt-2"
                                     >
                                         Sign In Now
@@ -356,7 +362,7 @@ export const Home = () => {
                                         <QrCode className="h-4 w-4" />
                                         {isGeneratingQR ? "Generating..." : (isLoggedIn ? "Generate QR Code" : "Sign In for QR Code")}
                                     </Button>
-                                    
+
                                     <Button
                                         variant="outline"
                                         onClick={resetForm}

@@ -262,7 +262,7 @@ export const login = async (req, res) => {
             path: "/",
         });
 
-        return successResponse(res, 200, "Logged in successfully");
+        return successResponse(res, 200, "Logged in successfully", token);
     } catch (error) {
         console.error("Login error:", error);
         return errorResponse(res, 500, "Internal server error");

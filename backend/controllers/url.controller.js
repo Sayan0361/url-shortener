@@ -8,32 +8,69 @@ import { UAParser } from "ua-parser-js";
 import fetch from "node-fetch";
 import QRCode from "qrcode";
 
-export const shorten = async(req,res) => {
-    try{
+export const shorten = async (req, res) => {
+    try {
         const validationResult = await shortenBodySchema.safeParseAsync(req.body);
-        if(validationResult.error){
-            return res.status(400).json({ 
-                error: validationResult.error
-            })
+        if (!validationResult.success) {
+            return res.status(400).json({
+                error: validationResult.error.errors.map(e => e.message).join(", "),
+            });
         }
-        const { url, code } = validationResult.data;
-        const shortCode = code ?? nanoid(6);
 
-        const result = await insertShortCodeIntoTable(shortCode, url, req.user.id);
+        const { url, code } = validationResult.data;
+
+        // Check if custom code already exists
+        if (code) {
+            const [existingUrl] = await db
+                .select()
+                .from(urlsTable)
+                .where(eq(urlsTable.shortCode, code));
+
+            if (existingUrl) {
+                return res.status(409).json({
+                    error: "Custom short code already exists. Please choose a different one.",
+                });
+            }
+        }
+
+        // Insert with retry on random collision
+        let shortCode = code ?? nanoid(6);
+        let result;
+        for (let i = 0; i < 3; i++) {
+            try {
+                result = await insertShortCodeIntoTable(shortCode, url, req.user.id);
+                break;
+            } catch (err) {
+                if (err.code === "23505") {
+                    shortCode = nanoid(6);
+                } else {
+                    throw err;
+                }
+            }
+        }
+
+        if (!result) {
+            return res.status(500).json({
+                error: "Failed to generate unique short code after multiple attempts.",
+            });
+        }
 
         return res.status(201).json({
-            result: {
-                id: result.id,
-                shortCode: result.shortCode,
-                targetURL: result.targetURL,
-            }
-        })
-    }
-    catch(error){
-        console.log(error);
+            id: result.id,
+            shortCode: result.shortCode,
+            targetURL: result.targetURL,
+        });
+    } catch (error) {
+        console.error(error);
+        if (error.code === "23505") {
+            return res.status(409).json({
+                error: "This short code is already taken. Please try a different one.",
+            });
+        }
         return res.status(500).json({ error: error.message });
     }
-}
+};
+
 
 export const getTargetURL = async (req, res) => { 
     try {
@@ -47,10 +84,6 @@ export const getTargetURL = async (req, res) => {
             })
             .from(urlsTable)
             .where(eq(urlsTable.shortCode, shortCode));
-
-        if (!url) {
-            return res.status(404).json({ error: "Invalid URL" });
-        }
 
         // Collect analytics info
         const userAgent = req.headers["user-agent"];

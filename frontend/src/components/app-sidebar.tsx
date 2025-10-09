@@ -10,9 +10,10 @@ import {
     SidebarMenuItem,
     SidebarMenuButton,
 } from "@/components/ui/sidebar";
-import { HomeIcon, SettingsIcon, UserIcon, ListChecks, LogOutIcon } from "lucide-react";
+import { HomeIcon, UserIcon, ListChecks, LogOutIcon, Link } from "lucide-react";
 import { useLogout } from "@/hooks/useUserQueries";
 import { useUserInfo } from "@/hooks/useUserQueries";
+
 
 // Navigation items
 const NAVIGATION_ITEMS = [
@@ -32,9 +33,9 @@ const NAVIGATION_ITEMS = [
         label: "Profile",
     },
     {
-        href: "/settings",
-        icon: SettingsIcon,
-        label: "Settings",
+        href: "/my-urls",
+        icon: Link,
+        label: "My URLs",
     },
 ];
 
