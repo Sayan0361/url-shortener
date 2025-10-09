@@ -82,7 +82,7 @@ export const Home = () => {
             },
             {
                 onSuccess: (data) => {
-                    const receivedShortCode = data?.result?.shortCode;
+                    const receivedShortCode = data?.shortCode;
 
                     if (receivedShortCode) {
                         // Use backend URL instead of frontend origin

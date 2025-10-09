@@ -6,7 +6,7 @@ import { Layout } from "@/components/Layout";
 import { Home } from "./pages/Home";
 import Features from "@/pages/Features";
 import Profile from "@/pages/Profile";
-import Settings from "@/pages/MyUrls";
+import MyUrls from "@/pages/MyUrls";
 import { SignIn } from "./pages/Signin";
 import { SignUp } from "./pages/SignUp";
 import { OTPPage } from "./pages/InputOTP";
@@ -26,7 +26,7 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/features" element={<Features />} />
             <Route path="/profile" element={<Profile />} />
-            <Route path="/settings" element={<Settings />} />
+            <Route path="/my-urls" element={<MyUrls />} />
             <Route path="/signin" element={<SignIn />} />
             <Route path="/signup" element={<SignUp />} />
             <Route path="/otp" element={<OTPPage />} />

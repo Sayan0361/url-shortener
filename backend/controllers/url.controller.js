@@ -71,7 +71,6 @@ export const shorten = async (req, res) => {
     }
 };
 
-
 export const getTargetURL = async (req, res) => { 
     try {
         const { shortCode } = req.params;

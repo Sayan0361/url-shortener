@@ -56,7 +56,7 @@ export const deleteUrl = async (id: string) => {
 export const updateUrl = async (id: string, newURL: string) => {
     try {
         const payload = {
-            url: newURL // Backend expects 'url'
+            newURL: newURL
         };
 
         const response = await axiosInstance.put(`/update/${id}`, payload);

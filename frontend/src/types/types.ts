@@ -36,3 +36,24 @@ export interface ChangeNameData {
     lastname?: string;
 }
 
+export interface Url {
+    id: string;
+    shortCode: string;
+    targetURL: string;
+    createdAt: string;
+}
+
+export interface AnalyticsData {
+    analytics: {
+        totalClicks: number;
+        byDevice: Array<{ deviceType: string; count: number }>;
+        byBrowser: Array<{ browser: string; count: number }>;
+        byCountry: Array<{ country: string; count: number }>;
+        dailyStats: Array<{ date: string; count: number }>;
+    };
+    url: {
+        id: string;
+        shortCode: string;
+        targetURL: string;
+    };
+}
