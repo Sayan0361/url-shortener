@@ -11,6 +11,7 @@ import { SignIn } from "./pages/Signin";
 import { SignUp } from "./pages/SignUp";
 import { OTPPage } from "./pages/InputOTP";
 import { Toaster } from "react-hot-toast";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
             <Route path="/signin" element={<SignIn />} />
             <Route path="/signup" element={<SignUp />} />
             <Route path="/otp" element={<OTPPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           </Routes>
         </Layout>
       </Router>
