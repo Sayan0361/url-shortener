@@ -1,19 +1,28 @@
-import { axiosInstance } from "./axios";
-import type { ShortenData } from "../types/types";
+import { axiosInstance } from "@/lib/axios"; 
+import type { ShortenData } from "@/types/types"; 
 
 // Helper to handle errors consistently
-const handleError = (error: any) => {
-    console.error("API Error:", error.response?.data || error.message);
-    throw error.response?.data || { message: "Something went wrong. Please try again." };
+const handleUrlError = (error: any) => {
+    console.error("URL API Error:", error.response?.data || error.message);
+    const errorData = error.response?.data || { message: "Something went wrong. Please try again." };
+    throw errorData;
 };
 
-// Create a short URL
+// Create a short URL - Fixed to match backend expectations
 export const createShortUrl = async (data: ShortenData) => {
     try {
-        const response = await axiosInstance.post("/shorten", data);
+        // Transform data to match backend expectations
+        const payload = {
+            url: data.url, // Backend expects 'url'
+            ...(data.code && data.code.trim() !== '' && { code: data.code }) // Only include if provided and not empty
+        };
+        
+        console.log("Sending payload to backend:", payload);
+        
+        const response = await axiosInstance.post("/shorten", payload);
         return response.data;
     } catch (error) {
-        handleError(error);
+        handleUrlError(error);
     }
 };
 
@@ -23,7 +32,7 @@ export const getAllUserUrls = async () => {
         const response = await axiosInstance.get("/codes");
         return response.data;
     } catch (error) {
-        handleError(error);
+        handleUrlError(error);
     }
 };
 
@@ -33,17 +42,21 @@ export const deleteUrl = async (id: string) => {
         const response = await axiosInstance.delete(`/delete/${id}`);
         return response.data;
     } catch (error) {
-        handleError(error);
+        handleUrlError(error);
     }
 };
 
-// Update a short URL
+// Update a short URL - Fixed to match backend expectations
 export const updateUrl = async (id: string, newURL: string) => {
     try {
-        const response = await axiosInstance.put(`/update/${id}`, { newURL });
+        const payload = {
+            url: newURL // Backend expects 'url'
+        };
+        
+        const response = await axiosInstance.put(`/update/${id}`, payload);
         return response.data;
     } catch (error) {
-        handleError(error);
+        handleUrlError(error);
     }
 };
 
@@ -53,7 +66,7 @@ export const getAnalytics = async (id: string) => {
         const response = await axiosInstance.get(`/analytics/${id}`);
         return response.data;
     } catch (error) {
-        handleError(error);
+        handleUrlError(error);
     }
 };
 
@@ -61,11 +74,19 @@ export const getAnalytics = async (id: string) => {
 export const generateQRCode = async (shortCode: string) => {
     try {
         const response = await axiosInstance.get(`/qrcode/${shortCode}`, {
-            responseType: "arraybuffer", // important for images
+            responseType: "arraybuffer",
         });
-        return response.data;
+        
+        // Convert arraybuffer to base64 for image display
+        const base64 = btoa(
+            new Uint8Array(response.data).reduce(
+                (data, byte) => data + String.fromCharCode(byte),
+                ''
+            )
+        );
+        return `data:image/png;base64,${base64}`;
     } catch (error) {
-        handleError(error);
+        handleUrlError(error);
     }
 };
 
@@ -75,6 +96,6 @@ export const redirectToTarget = async (shortCode: string) => {
         const response = await axiosInstance.get(`/${shortCode}`);
         return response.data;
     } catch (error) {
-        handleError(error);
+        handleUrlError(error);
     }
 };

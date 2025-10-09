@@ -66,7 +66,7 @@ export function SignIn() {
     };
 
     const handleForgotPassword = () => {
-        navigate("/forgot-password"); // Create this route if needed
+        navigate("/forgot-password");
     };
 
     return (

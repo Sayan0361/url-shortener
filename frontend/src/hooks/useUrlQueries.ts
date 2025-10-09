@@ -8,12 +8,21 @@ import {
     generateQRCode,
 } from "@/lib/url.api";
 import type { ShortenData } from "@/types/types";
+import { toast } from "react-hot-toast";
 
 // get all urls
 export const useUserUrls = () => {
     return useQuery({
         queryKey: ["urls"],
         queryFn: getAllUserUrls,
+        staleTime: 1000 * 60 * 5, // 5 min
+        retry: (failureCount, error: any) => {
+            // Don't retry on 401 (Unauthorized)
+            if (error?.status === 401) {
+                return false;
+            }
+            return failureCount < 3; // Retry up to 3 times
+        },
     });
 };
 
@@ -24,6 +33,11 @@ export const useCreateShortUrl = () => {
         mutationFn: (data: ShortenData) => createShortUrl(data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["urls"] });
+            toast.success("URL shortened successfully!");
+        },
+        onError: (err: any) => {
+            const message = err?.message || "Failed to create short URL";
+            toast.error(message);
         },
     });
 };
@@ -35,6 +49,11 @@ export const useDeleteUrl = () => {
         mutationFn: (id: string) => deleteUrl(id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["urls"] });
+            toast.success("URL deleted successfully!");
+        },
+        onError: (err: any) => {
+            const message = err?.message || "Failed to delete URL";
+            toast.error(message);
         },
     });
 };
@@ -46,6 +65,11 @@ export const useUpdateUrl = () => {
         mutationFn: ({ id, newURL }: { id: string; newURL: string }) => updateUrl(id, newURL),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["urls"] });
+            toast.success("URL updated successfully!");
+        },
+        onError: (err: any) => {
+            const message = err?.message || "Failed to update URL";
+            toast.error(message);
         },
     });
 };
@@ -56,14 +80,24 @@ export const useAnalytics = (id: string) => {
         queryKey: ["analytics", id],
         queryFn: () => getAnalytics(id),
         enabled: !!id,
+        staleTime: 1000 * 60 * 5, // 5 min
+        retry: (failureCount, error: any) => {
+            // Don't retry on 401 (Unauthorized)
+            if (error?.status === 401) {
+                return false;
+            }
+            return failureCount < 3; // Retry up to 3 times
+        },  
     });
 };
 
-// generate QR
-export const useQRCode = (shortCode: string) => {
-    return useQuery({
-        queryKey: ["qrcode", shortCode],
-        queryFn: () => generateQRCode(shortCode),
-        enabled: !!shortCode,
+// generate QR - Fixed: Changed from useQuery to useMutation since it's an action
+export const useGenerateQRCode = () => {
+    return useMutation({
+        mutationFn: (shortCode: string) => generateQRCode(shortCode),
+        onError: (err: any) => {
+            const message = err?.message || "Failed to generate QR code";
+            toast.error(message);
+        },
     });
 };

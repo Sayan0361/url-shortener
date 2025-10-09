@@ -10,7 +10,9 @@ import {
     SidebarMenuItem,
     SidebarMenuButton,
 } from "@/components/ui/sidebar";
-import { HomeIcon, SettingsIcon, UserIcon, ListChecks } from "lucide-react";
+import { HomeIcon, SettingsIcon, UserIcon, ListChecks, LogOutIcon } from "lucide-react";
+import { useLogout } from "@/hooks/useUserQueries";
+import { useUserInfo } from "@/hooks/useUserQueries";
 
 // Navigation items
 const NAVIGATION_ITEMS = [
@@ -20,12 +22,12 @@ const NAVIGATION_ITEMS = [
         label: "Home",
     },
     {
-        href: "/features", 
+        href: "/features",
         icon: ListChecks,
         label: "Features",
     },
     {
-        href: "/profile", 
+        href: "/profile",
         icon: UserIcon,
         label: "Profile",
     },
@@ -37,6 +39,30 @@ const NAVIGATION_ITEMS = [
 ];
 
 export function AppSidebar() {
+    const { data: userData, isLoading } = useUserInfo();
+    const { mutate: logout, isPending } = useLogout();
+
+    const handleLogout = () => {
+        logout(undefined, {
+            onSuccess: () => {
+                // Clear local storage
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('refreshToken');
+                // Redirect to login page
+                window.location.href = '/signin';
+            },
+            onError: () => {
+                // Still clear local storage and redirect even if API call fails
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('refreshToken');
+                window.location.href = '/signin';
+            },
+        });
+    };
+
+    // Check if user is logged in (user data exists and no error)
+    const isLoggedIn = !isLoading && userData?.data;
+
     return (
         <Sidebar collapsible="icon" side="left">
             <SidebarHeader>
@@ -60,9 +86,22 @@ export function AppSidebar() {
                     </SidebarGroupContent>
                 </SidebarGroup>
             </SidebarContent>
-            <SidebarFooter>
-                {/* maybe user profile, logout */}
-            </SidebarFooter>
+            {isLoggedIn && (
+                <SidebarFooter>
+                    <SidebarMenu>
+                        <SidebarMenuItem>
+                            <SidebarMenuButton
+                                onClick={handleLogout}
+                                disabled={isPending}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <LogOutIcon className={isPending ? "animate-spin" : ""} />
+                                <span>{isPending ? "Logging out..." : "Logout"}</span>
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
+                    </SidebarMenu>
+                </SidebarFooter>
+            )}
         </Sidebar>
     );
 }
