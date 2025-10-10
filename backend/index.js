@@ -4,28 +4,17 @@ import cookieParser from "cookie-parser";
 import "dotenv/config";
 import userRouter from "./routes/user.routes.js";
 import urlRouter from "./routes/url.routes.js";
+import path from "path";
 
 const app = express();
 const PORT = process.env.PORT ?? 8000;
-
-const DEV_ORIGINS = ["http://localhost:5173", "http://localhost:5000"];
-const PROD_ORIGINS = ["https://bit-blond.vercel.app"];
-
-const allowedOrigins = process.env.NODE_ENV === "production" ? PROD_ORIGINS : DEV_ORIGINS;
+const __dirname = path.resolve();
 
 app.use(cors({
-    origin: function (origin, callback) {
-        if (!origin || allowedOrigins.includes(origin)) {
-            callback(null, true);
-        } else {
-            callback(new Error("CORS not allowed"));
-        }
-    },
-    credentials: true
+    origin: "http://localhost:5173", // Replace with your frontend URL
+    methods: ["GET", "POST", "PUT", "DELETE"], // Allowed HTTP methods
+    credentials: true, // Allow cookies to be sent with requests
 }));
-
-// handle OPTIONS preflight for all routes
-app.options("*", cors({ origin: allowedOrigins, credentials: true }));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -37,6 +26,14 @@ app.get("/", (req, res) => {
 
 app.use("/user", userRouter);
 app.use("/", urlRouter);
+
+if(process.env.NODE_ENV === "production"){
+    app.use(express.static(path.join(__dirname,"../frontend/dist")));
+
+    app.get("*",(req,res)=>{
+        res.sendFile(path.join(__dirname,"../frontend/dist/index.html"));
+    })
+}
 
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
