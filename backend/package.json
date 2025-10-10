@@ -10,7 +10,8 @@
     "dev": "node --watch --trace-warnings index.js",
     "db:push": "drizzle-kit push",
     "db:pull": "drizzle-kit pull",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "render-build": "echo \"No build needed for Node.js\""
   },
   "keywords": [],
   "author": "",

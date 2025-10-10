@@ -1,25 +1,33 @@
-# Use Node 20 Alpine
 FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy package files and install deps
-COPY package*.json pnpm-lock.yaml* ./
+# Install pnpm globally
 RUN npm install -g pnpm
-RUN pnpm install
 
-# Copy source code
+# Copy package files
+COPY package.json ./
+COPY pnpm-lock.yaml ./
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile --prod
+
+# Copy backend source code
 COPY . .
 
-# Build the app if needed
-# RUN pnpm run build
+# Build frontend (we'll handle this differently - see below)
+# For now, we'll build frontend separately and copy the dist folder
 
-# Expose backend port
-EXPOSE 5000
+# Create non-root user for security
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nodeuser -u 1001
+USER nodeuser
 
-# Environment variables will be injected by Render
-ENV PORT=5000
-ENV NODE_ENV=production
+EXPOSE 10000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:10000/health || exit 1
 
 # Start the app
-CMD ["pnpm", "start"]
+CMD ["node", "index.js"]

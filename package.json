@@ -1,0 +1,21 @@
+{
+  "name": "url-shortner",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "build": "pnpm install --prefix backend && npm install --prefix frontend && npm run build --prefix frontend",
+    "start": "pnpm run start --prefix backend"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sayan0361/url-shortner.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Sayan0361/url-shortner/issues"
+  },
+  "homepage": "https://github.com/Sayan0361/url-shortner#readme"
+}

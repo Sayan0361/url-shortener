@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: url-shortener
+    env: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: NODE_ENV
+        value: production
+    healthCheckPath: /health
+    autoDeploy: true
+
+databases:
+  - name: url-shortener-db
+    databaseName: urlshortener
+    user: urlshortener_user
+    plan: free

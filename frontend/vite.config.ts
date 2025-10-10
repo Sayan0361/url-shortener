@@ -12,13 +12,23 @@ export default defineConfig({
     },
   },
   server: {
-    host: true, // allows WebSocket to bind to your network interface
+    host: true,
     port: 5173,
     strictPort: true,
-    hmr: {
-      protocol: 'ws',
-      host: 'localhost',
-      port: 5173,
-    },
   },
+  build: {
+    outDir: 'dist',
+    sourcemap: false,
+    // Important for SPA
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          ui: ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu']
+        }
+      }
+    }
+  },
+  // Base path for production - empty for same domain
+  base: './'
 })
