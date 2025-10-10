@@ -1,42 +1,43 @@
-import express from "express"
-import "dotenv/config"
-import cookieParser from "cookie-parser" 
-import userRouter from "./routes/user.routes.js"
-import urlRouter from "./routes/url.routes.js"
-import cors from "cors"
+import express from "express";
+import cors from "cors";
+import cookieParser from "cookie-parser";
+import "dotenv/config";
+import userRouter from "./routes/user.routes.js";
+import urlRouter from "./routes/url.routes.js";
 
-const app = express()
-const PORT = process.env.PORT ?? 8000
+const app = express();
+const PORT = process.env.PORT ?? 8000;
 
-// CORS configuration
+const DEV_ORIGINS = ["http://localhost:5173", "http://localhost:5000"];
+const PROD_ORIGINS = ["https://bit-blond.vercel.app"];
+
+const allowedOrigins = process.env.NODE_ENV === "production" ? PROD_ORIGINS : DEV_ORIGINS;
+
 app.use(cors({
-    origin: process.env.NODE_ENV === "production" 
-        ? ["your-production-domain.com"]  // Replace with your actual domain
-        : ["http://localhost:5173", "http://localhost:3000"], // Vite default port
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-    allowedHeaders: ["Content-Type", "Authorization", "Cookie"]
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error("CORS not allowed"));
+        }
+    },
+    credentials: true
 }));
+
+// handle OPTIONS preflight for all routes
+app.options("*", cors({ origin: allowedOrigins, credentials: true }));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser()); 
+app.use(cookieParser());
 
-// Public health check route
-app.get("/", (req,res) => {
-    return res.json({
-        status: 200,
-        message: `Server is working fine`
-    })
-})
+app.get("/", (req, res) => {
+    res.json({ status: 200, message: "Server is working fine" });
+});
 
-// Auth routes (contains both public and protected routes)
 app.use("/user", userRouter);
-
-// Protected URL routes
 app.use("/", urlRouter);
 
-app.listen(PORT, ()=>{
+app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
-})
-
+});
