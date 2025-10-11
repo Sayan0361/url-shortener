@@ -5,7 +5,7 @@ import "dotenv/config";
 import userRouter from "./routes/user.routes.js";
 import urlRouter from "./routes/url.routes.js";
 import path from "path";
-import { fileURLToPath } from 'url';
+import { fileURLToPath } from "url";
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -14,107 +14,109 @@ const PORT = process.env.PORT || 10000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// CORS configuration
+// ---------------- CORS CONFIG ----------------
 const corsOptions = {
     origin: function (origin, callback) {
         const allowedOrigins = [
-            "https://bit-blond.vercel.app",
-            "http://localhost:5173"
+            "https://bitt-bay.vercel.app",
+            "https://bit-blond.vercel.app", // frontend prod
+            "http://localhost:5173",        // frontend dev
         ];
-        
-        // Allow requests with no origin (like mobile apps or server-to-server)
+
+        // Allow server-to-server or Postman (no origin)
         if (!origin) return callback(null, true);
-        
+
         if (allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
-            console.log('CORS blocked for origin:', origin);
-            callback(new Error('CORS not allowed'));
+            console.log("❌ CORS blocked for origin:", origin);
+            callback(new Error("CORS not allowed"));
         }
     },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
+    allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
+app.options("*", cors(corsOptions));
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
 
-// Logging middleware
+// ---------------- LOGGING ----------------
 app.use((req, res, next) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
     next();
 });
 
-// Health check endpoint
-app.get('/health', (req, res) => {
+// ---------------- HEALTH CHECK ----------------
+app.get("/health", (req, res) => {
     res.status(200).json({
-        status: 'OK',
-        message: 'Server is healthy',
+        status: "OK",
+        message: "Server is healthy",
         timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV
+        environment: process.env.NODE_ENV,
     });
 });
 
-// API routes
+// ---------------- API ROUTES ----------------
 app.get("/", (req, res) => {
-    res.json({ 
-        status: 200, 
+    res.json({
+        status: 200,
         message: "URL Shortener API is working",
-        environment: process.env.NODE_ENV
+        environment: process.env.NODE_ENV,
     });
 });
 
 app.use("/user", userRouter);
 app.use("/", urlRouter);
 
-// Serve frontend in production
+// ---------------- 404 FOR UNKNOWN API ROUTES ----------------
+app.use((req, res, next) => {
+    if (req.path.startsWith("/user") || req.path.startsWith("/url")) {
+        return res.status(404).json({ error: "Route not found" });
+    }
+    next();
+});
+
+// ---------------- SERVE FRONTEND (IN PRODUCTION) ----------------
 if (process.env.NODE_ENV === "production") {
-    // Path to frontend build directory (one level up from backend)
-    const frontendPath = path.join(__dirname, '../../frontend/dist');
-    console.log('Serving frontend from:', frontendPath);
-    
-    // Serve static files
+    const frontendPath = path.join(__dirname, "../../frontend/dist");
+    console.log("📦 Serving frontend from:", frontendPath);
+
     app.use(express.static(frontendPath));
-    
-    // Handle SPA routing - serve index.html for all unknown routes
-    app.get('*', (req, res) => {
-        // Don't handle API routes
-        if (req.path.startsWith('/api') || req.path.startsWith('/user') || req.path.startsWith('/url')) {
-            return res.status(404).json({ error: 'Route not found' });
-        }
-        res.sendFile(path.join(frontendPath, 'index.html'));
+
+    // Send index.html for any non-API routes (SPA fallback)
+    app.get("*", (req, res) => {
+        res.sendFile(path.join(frontendPath, "index.html"));
     });
 }
 
-// 404 handler for API routes
-app.use((req, res) => {
-    res.status(404).json({ error: 'Route not found' });
-});
-
-// Global error handler
+// ---------------- GLOBAL ERROR HANDLER ----------------
 app.use((err, req, res, next) => {
-    console.error('Error:', err.message);
-    
-    if (err.message.includes('CORS')) {
-        return res.status(403).json({ 
-            error: "CORS Error", 
-            message: "Not allowed by CORS policy"
+    console.error("Error:", err.message);
+
+    if (err.message.includes("CORS")) {
+        return res.status(403).json({
+            error: "CORS Error",
+            message: "Not allowed by CORS policy",
         });
     }
-    
-    res.status(500).json({ 
+
+    res.status(500).json({
         error: "Internal Server Error",
-        message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+        message:
+            process.env.NODE_ENV === "development"
+                ? err.message
+                : "Something went wrong",
     });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server is running on port ${PORT}`);
-    console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+// ---------------- START SERVER ----------------
+app.listen(PORT, "0.0.0.0", () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`🌍 Environment: ${process.env.NODE_ENV || "development"}`);
     console.log(`🏠 URL: http://localhost:${PORT}`);
 });
