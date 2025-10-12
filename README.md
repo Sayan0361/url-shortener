@@ -1,4 +1,4 @@
-#﻿﻿# URL Shortener
+## URL Shortener
 
 A full-featured URL Shortener with authentication, analytics, and QR code generation built for modern web use.  
 
@@ -44,6 +44,7 @@ A full-featured URL Shortener with authentication, analytics, and QR code genera
 ![image8](./images/image8.png)  
 ![image9](./images/image9.png)  
 ![image10](./images/image10.png)
+
 
 
 
