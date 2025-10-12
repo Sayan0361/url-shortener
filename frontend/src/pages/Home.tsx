@@ -86,7 +86,7 @@ export const Home = () => {
 
                     if (receivedShortCode) {
                         // Use backend URL instead of frontend origin
-                        const backendUrl = import.meta.env.VITE_API_URL || "http://localhost:3000";
+                        const backendUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
                         const shortUrl = `${backendUrl}/${receivedShortCode}`;
                         setGeneratedUrl(shortUrl);
                         toast.success("URL shortened successfully!");

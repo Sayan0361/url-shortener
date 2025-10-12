@@ -103,7 +103,7 @@ export const changeName = async (data: ChangeNameData) => {
 // Get user info
 export const getUserInfo = async () => {
     try {
-        const response = await axiosInstance.get("/user/me");
+        const response = await axiosInstance.get("/user/me" );
         return response.data;
     } catch (error) {
         handleError(error);

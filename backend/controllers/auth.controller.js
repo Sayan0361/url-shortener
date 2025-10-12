@@ -257,12 +257,12 @@ export const login = async (req, res) => {
         res.cookie("Authorization", `Bearer ${token}`, {
             expires: new Date(Date.now() + 8 * 60 * 60 * 1000), // 8 hours
             httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
+            secure: false, // turn on for production
             sameSite: "strict",
             path: "/",
         });
 
-        return successResponse(res, 200, "Logged in successfully", token);
+    return successResponse(res, 200, "Logged in successfully", token);
     } catch (error) {
         console.error("Login error:", error);
         return errorResponse(res, 500, "Internal server error");

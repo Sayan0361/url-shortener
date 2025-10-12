@@ -12,7 +12,7 @@ const PORT = process.env.PORT ?? 8000
 app.use(cors({
     origin: process.env.NODE_ENV === "production" 
         ? ["your-production-domain.com"]  // Replace with your actual domain
-        : ["http://localhost:5173", "http://localhost:3000"], // Vite default port
+        : ["http://localhost:5173", "http://localhost:5000"], // Vite default port
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     allowedHeaders: ["Content-Type", "Authorization", "Cookie"]
